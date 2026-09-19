@@ -770,4 +770,88 @@ if registration not in text:
     text = text.replace(init_line, registration + "\\n" + init_line, 1)
 entry.write_text(text, encoding="utf-8")
 
+
+
+# Replace the HUD local-capture mixin with Forge's native GUI layer event.
+gui_bridge = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/render/ForgeGuiOverlayBridge.java"
+gui_bridge.parent.mkdir(parents=True, exist_ok=True)
+gui_bridge.write_text("""package team.cagayakegirls.mafglib.render;
+
+import net.minecraft.resources.Identifier;
+import net.minecraftforge.client.event.AddGuiOverlayLayersEvent;
+
+import fi.dy.masa.malilib.event.RenderEventHandler;
+import fi.dy.masa.malilib.render.GuiContext;
+
+public final class ForgeGuiOverlayBridge
+{
+    private ForgeGuiOverlayBridge() {}
+
+    public static void register(AddGuiOverlayLayersEvent event)
+    {
+        event.getLayeredDraw().add(
+                Identifier.fromNamespaceAndPath("mafglib", "overlay_post"),
+                (graphics, deltaTracker) ->
+                        ((RenderEventHandler) RenderEventHandler.getInstance()).runExtractGuiOverlayPost(
+                                GuiContext.fromGuiGraphics(graphics),
+                                deltaTracker.getGameTimeDeltaPartialTick(false)
+                        )
+        );
+    }
+}
+""", encoding="utf-8")
+
+entry = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/MaFgLib.java"
+text = entry.read_text(encoding="utf-8")
+if "net.minecraftforge.client.event.AddGuiOverlayLayersEvent" not in text:
+    text = text.replace(
+        "import net.minecraftforge.client.event.AddFramePassEvent;",
+        "import net.minecraftforge.client.event.AddFramePassEvent;\\nimport net.minecraftforge.client.event.AddGuiOverlayLayersEvent;"
+    )
+if "team.cagayakegirls.mafglib.render.ForgeGuiOverlayBridge" not in text:
+    text = text.replace(
+        "import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;",
+        "import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;\\nimport team.cagayakegirls.mafglib.render.ForgeGuiOverlayBridge;"
+    )
+gui_registration = "        AddGuiOverlayLayersEvent.BUS.addListener(ForgeGuiOverlayBridge::register);"
+if gui_registration not in text:
+    frame_registration = "        AddFramePassEvent.BUS.addListener(ForgeFramePassBridge::register);"
+    if frame_registration not in text:
+        raise SystemExit("Frame-pass listener registration anchor missing")
+    text = text.replace(frame_registration, frame_registration + "\\n" + gui_registration, 1)
+entry.write_text(text, encoding="utf-8")
+
+# Remove the old Gui local-capture mixin from the active config.
+mixin_cfg = root / "mafglib/src/main/resources/mixins.malilib.json"
+cfg = json.loads(mixin_cfg.read_text(encoding="utf-8"))
+for section in ("mixins", "client", "server"):
+    if section in cfg:
+        cfg[section] = [name for name in cfg[section] if name != "gui.MixinGui"]
+mixin_cfg.write_text(json.dumps(cfg, indent=2) + "\\n", encoding="utf-8")
+
+
+# Remove Litematica's CameraRenderState @Local capture. GameRenderer exposes its
+# GameRenderState, whose LevelRenderState contains the extracted camera state.
+game_renderer_mixin = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinGameRenderer.java"
+text = game_renderer_mixin.read_text(encoding="utf-8")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\\n\\n", "")
+if "import net.minecraft.client.Minecraft;" not in text:
+    text = text.replace("import net.minecraft.client.DeltaTracker;", "import net.minecraft.client.DeltaTracker;\\nimport net.minecraft.client.Minecraft;")
+text = re.sub(
+    r'private void litematica_updateCameraState\\(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci,\\s*'
+    r'@Local\\(name = "cameraState"\\) CameraRenderState cameraState\\)',
+    'private void litematica_updateCameraState(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci)',
+    text
+)
+old_call = "LitematicaRenderer.getInstance().updateCameraState(this.mainCamera, cameraEntityPartialTicks, cameraState);"
+new_call = """CameraRenderState cameraState = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
+        LitematicaRenderer.getInstance().updateCameraState(this.mainCamera, cameraEntityPartialTicks, cameraState);"""
+if old_call in text:
+    text = text.replace(old_call, new_call, 1)
+elif new_call not in text:
+    raise SystemExit("Could not replace Litematica GameRenderer camera local capture")
+if "@Local(" in text:
+    raise SystemExit("Litematica MixinGameRenderer still contains @Local capture")
+game_renderer_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
