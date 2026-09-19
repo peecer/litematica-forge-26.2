@@ -433,4 +433,48 @@ for method in ("litematica_renderMainSection_Opaque", "litematica_renderMainSect
         raise SystemExit(f"{method} still has NeoForge-only Matrix4fc parameter")
 level_renderer_mixin.write_text(text, encoding="utf-8")
 
+
+
+# Litematica's renderMainPass hook is a NeoForge-era no-op: its entire body is
+# commented out, but its @Inject target references NeoForge's 3-argument
+# addWeatherPass overload, which Forge does not have. Remove the dead hook.
+# Also stop capturing the render() local profiler through MixinExtras; use
+# Profiler.get() so this file no longer depends on fragile local indexes.
+level_renderer_mixin = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinLevelRenderer.java"
+text = level_renderer_mixin.read_text(encoding="utf-8")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n", "")
+
+# Remove @Local profiler parameter from litematica_onPreRenderMain.
+text = re.sub(
+    r'(private void litematica_onPreRenderMain\([\s\S]*?boolean shouldRenderSky, CallbackInfo ci),\s*'
+    r'@Local\(name = "profiler"\) ProfilerFiller profiler\)',
+    r'\1)',
+    text,
+    count=1
+)
+old_line = "        this.profiler = profiler;"
+if old_line in text:
+    text = text.replace(
+        old_line,
+        "        ProfilerFiller profiler = Profiler.get();\n        this.profiler = profiler;",
+        1
+    )
+
+# Remove the dead NeoForge-only weather-pass callback completely.
+dead_hook = re.compile(
+    r'\n\s*@Inject\(method = "render",\s*'
+    r'at = @At\(value = "INVOKE",\s*'
+    r'target = "Lnet/minecraft/client/renderer/LevelRenderer;addWeatherPass\(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;\)V",\s*'
+    r'shift = At\.Shift\.BEFORE\)\)\s*'
+    r'private void litematica_renderMainPass\([\s\S]*?\n\s*\}\n',
+    re.MULTILINE
+)
+text, removed = dead_hook.subn("\n", text, count=1)
+if removed == 0 and "litematica_renderMainPass" in text:
+    raise SystemExit("Could not remove dead NeoForge-only litematica_renderMainPass hook")
+
+if "@Local(" in text:
+    raise SystemExit("MixinLevelRenderer still contains fragile @Local capture")
+level_renderer_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
