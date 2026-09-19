@@ -360,7 +360,7 @@ level_extractor_mixin.write_text(text, encoding="utf-8")
 # active profiler without depending on local variable table indexes.
 malilib_level_extractor = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelExtractor.java"
 text = malilib_level_extractor.read_text(encoding="utf-8")
-text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n\n", "")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n", "")
 if "import net.minecraft.util.profiling.Profiler;" not in text:
     text = text.replace(
         "import net.minecraft.util.profiling.ProfilerFiller;",
@@ -838,12 +838,14 @@ text = game_renderer_mixin.read_text(encoding="utf-8")
 text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n\n", "")
 if "import net.minecraft.client.Minecraft;" not in text:
     text = text.replace("import net.minecraft.client.DeltaTracker;", "import net.minecraft.client.DeltaTracker;\nimport net.minecraft.client.Minecraft;")
-text = re.sub(
-    r'private void litematica_updateCameraState\\(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci,\\s*'
-    r'@Local\\(name = "cameraState"\\) CameraRenderState cameraState\\)',
-    'private void litematica_updateCameraState(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci)',
-    text
-)
+local_marker = '@Local(name = "cameraState") CameraRenderState cameraState'
+local_pos = text.find(local_marker)
+if local_pos >= 0:
+    method_pos = text.rfind("private void litematica_updateCameraState(", 0, local_pos)
+    comma_pos = text.rfind(",", method_pos, local_pos)
+    if method_pos < 0 or comma_pos < 0:
+        raise SystemExit("Could not locate camera @Local parameter boundary")
+    text = text[:comma_pos] + text[local_pos + len(local_marker):]
 old_call = "LitematicaRenderer.getInstance().updateCameraState(this.mainCamera, cameraEntityPartialTicks, cameraState);"
 new_call = """CameraRenderState cameraState = Minecraft.getInstance().gameRenderer.gameRenderState().levelRenderState.cameraRenderState;
         LitematicaRenderer.getInstance().updateCameraState(this.mainCamera, cameraEntityPartialTicks, cameraState);"""
