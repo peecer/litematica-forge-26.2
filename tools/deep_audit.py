@@ -167,6 +167,22 @@ stats["mixin_local_captures"] = len(local_capture_sites)
 for site in local_capture_sites:
     fail("MixinExtras @Local capture is forbidden on this Forge/Mixin 0.8.7 port: " + site)
 
+
+# Minecraft 26.2 version.json declares client resource format 88.0.
+for module, base in MODULES.items():
+    pack_meta = base / "src/main/resources/pack.mcmeta"
+    if not pack_meta.is_file():
+        fail(f"{module}: missing pack.mcmeta")
+        continue
+    try:
+        pack_data = json.loads(pack_meta.read_text(encoding="utf-8"))
+        pack = pack_data["pack"]
+    except Exception as exc:
+        fail(f"{module}: invalid pack.mcmeta: {exc}")
+        continue
+    if pack.get("min_format") != [88, 0] or pack.get("max_format") != [88, 0]:
+        fail(f"{module}: pack.mcmeta must target Minecraft 26.2 resource format 88.0")
+
 # Forge metadata.
 def parse_mod_ids(text):
     result = []
