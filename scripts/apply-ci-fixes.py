@@ -397,4 +397,40 @@ elif new_sig not in text:
     raise SystemExit("Could not update Litematica extractVisibleBlockEntities callback signature")
 litematica_level_extractor.write_text(text, encoding="utf-8")
 
+
+
+# Forge 26.2's synthetic LevelRenderer.lambda$addMainPass$0 does not carry
+# NeoForge's extra Matrix4fc parameter. Remove it from both Litematica callbacks
+# so their descriptors match the actual Forge runtime method.
+level_renderer_mixin = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinLevelRenderer.java"
+text = level_renderer_mixin.read_text(encoding="utf-8")
+text = text.replace(
+    "ChunkSectionsToRender chunkSectionsToRender, Matrix4fc modelViewMatrix,\n\t\t\t\t\t\t\t\t\t\t\t\t ResourceHandle<RenderTarget> entityOutlineTarget",
+    "ChunkSectionsToRender chunkSectionsToRender,\n\t\t\t\t\t\t\t\t\t\t\t\t ResourceHandle<RenderTarget> entityOutlineTarget"
+)
+text = text.replace(
+    "ChunkSectionsToRender chunkSectionsToRender, Matrix4fc modelViewMatrix,\n\t                                                      ResourceHandle<RenderTarget> entityOutlineTarget",
+    "ChunkSectionsToRender chunkSectionsToRender,\n\t                                                      ResourceHandle<RenderTarget> entityOutlineTarget"
+)
+# Fallback for formatting differences.
+text = re.sub(
+    r'(private void litematica_renderMainSection_Opaque\([\s\S]*?ChunkSectionsToRender chunkSectionsToRender),\s*Matrix4fc modelViewMatrix,',
+    r'\1,',
+    text,
+    count=1
+)
+text = re.sub(
+    r'(private void litematica_renderMainSection_Translucent\([\s\S]*?ChunkSectionsToRender chunkSectionsToRender),\s*Matrix4fc modelViewMatrix,',
+    r'\1,',
+    text,
+    count=1
+)
+for method in ("litematica_renderMainSection_Opaque", "litematica_renderMainSection_Translucent"):
+    m = re.search(rf'private void {method}\((.*?)CallbackInfo ci\)', text, flags=re.S)
+    if not m:
+        raise SystemExit(f"Could not find {method} callback after Forge lambda descriptor fix")
+    if "Matrix4fc modelViewMatrix" in m.group(1):
+        raise SystemExit(f"{method} still has NeoForge-only Matrix4fc parameter")
+level_renderer_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
