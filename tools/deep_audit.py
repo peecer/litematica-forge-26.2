@@ -165,7 +165,7 @@ for path, text in texts.items():
             local_capture_sites.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
 stats["mixin_local_captures"] = len(local_capture_sites)
 for site in local_capture_sites:
-    warnings.append("MixinExtras local capture: " + site)
+    fail("MixinExtras @Local capture is forbidden on this Forge/Mixin 0.8.7 port: " + site)
 
 # Forge metadata.
 def parse_mod_ids(text):
