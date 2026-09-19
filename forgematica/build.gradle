@@ -2,7 +2,7 @@ plugins {
     id 'java'
     id 'idea'
     id 'eclipse'
-    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+    id 'net.minecraftforge.gradle' version '[7.0.29,8.0)'
 }
 
 version = '0.5.0+mc26.2-forge.1'
@@ -15,6 +15,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.files.collect { it.name }.sort()
 
 minecraft {
+    mappings channel: 'official', version: project.minecraft_version
     accessTransformer = true
     runs {
         configureEach {
