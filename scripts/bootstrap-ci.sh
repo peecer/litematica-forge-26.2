@@ -66,6 +66,25 @@ sync_upstream_assets() {
   cp -a "$assets_root/." "$module/src/main/resources/assets/"
 }
 
+
+mirror_legacy_shader_programs() {
+  local module="$1"
+  local shader_root="$module/src/main/resources/assets"
+  local namespace_dir
+
+  while IFS= read -r -d '' namespace_dir; do
+    local shaders="$namespace_dir/shaders"
+    [[ -d "$shaders" ]] || continue
+
+    local core="$shaders/core"
+    mkdir -p "$core"
+
+    while IFS= read -r -d '' shader; do
+      cp "$shader" "$core/$(basename "$shader")"
+    done < <(find "$shaders" -maxdepth 1 -type f \( -name '*.vsh' -o -name '*.fsh' \) -print0)
+  done < <(find "$shader_root" -mindepth 1 -maxdepth 1 -type d -print0)
+}
+
 fetch_source "$FORGEMATICA_PROJECT" "$FORGEMATICA_SOURCE_FILE" "$work/forgematica-sources.jar"
 fetch_source "$MAFGLIB_PROJECT" "$MAFGLIB_SOURCE_FILE" "$work/mafglib-sources.jar"
 
@@ -81,6 +100,12 @@ python3 scripts/apply-ci-fixes.py
 # pinned current upstream commits; loader metadata remains Forge-owned.
 sync_upstream_assets forgematica CagayakeGirls/litematica-neoforge "$FORGEMATICA_UPSTREAM_SHA"
 sync_upstream_assets mafglib CagayakeGirls/malilib-neoforge "$MAFGLIB_UPSTREAM_SHA"
+
+# Minecraft 26.2 resolves RenderPipeline shader program ids from shaders/core/.
+# Upstream still ships several legacy .vsh/.fsh programs at shaders/ root.
+# Mirror those programs into the 26.2 core layout while retaining root copies.
+mirror_legacy_shader_programs forgematica
+mirror_legacy_shader_programs mafglib
 
 echo "Staged Java files:"
 printf '  Forgematica: '
