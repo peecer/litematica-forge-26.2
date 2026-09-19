@@ -21,6 +21,17 @@ cp "$MAFGLIB_JAR" "$RUN_DIR/mods/"
 echo "Smoke-testing packaged jars:"
 ls -lh "$RUN_DIR/mods"
 
+echo "Verifying required MaLiLib runtime shaders are inside the packaged JAR..."
+for shader in   assets/malilib/shaders/legacy_terrain.vsh   assets/malilib/shaders/legacy_terrain.fsh   assets/malilib/shaders/int_position_color.vsh   assets/malilib/shaders/int_position_color.fsh
+do
+  if ! unzip -l "$MAFGLIB_JAR" | grep -F -q "$shader"; then
+    echo "Missing packaged shader: $shader"
+    echo "Available MaLiLib shader entries:"
+    unzip -l "$MAFGLIB_JAR" | grep -E 'assets/malilib/.+shader|assets/malilib/shaders' || true
+    exit 1
+  fi
+done
+
 echo "Launching clean Forge client under Xvfb for a bounded smoke test..."
 set +e
 timeout --signal=INT --kill-after=20s 180s \
