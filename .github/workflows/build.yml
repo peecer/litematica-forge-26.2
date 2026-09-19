@@ -76,17 +76,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
           TAG="forge-26.2-build-${GITHUB_RUN_NUMBER}"
           TITLE="Litematica Forge 26.2 build #${GITHUB_RUN_NUMBER}"
-
-          gh release create "$TAG"             release/*.jar             release/SHA256SUMS.txt             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --title "$TITLE"             --notes "Successful Java 25 build for Minecraft 26.2 + Forge 65.1.0.
-
-Install both JARs from this release in your mods folder:
-- Litematica / Forgematica Forge
-- MaFgLib Forge
-
-The MaFgLib release JAR contains the bundled Conditional Mixin dependency. Do not use a -slim JAR."
+          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Successful Java 25 build for Minecraft 26.2 + Forge 65.1.0. Install both JARs from this release. MaFgLib includes the bundled Conditional Mixin dependency."
 
       - name: Upload diagnostics
         if: failure()
