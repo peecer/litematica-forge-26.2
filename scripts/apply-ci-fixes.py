@@ -918,7 +918,9 @@ public class MixinLanguage
     )
     private static void malilib$loadFromJson(InputStream stream, BiConsumer<String, String> output, CallbackInfo ci)
     {
-        JsonObject entries = MALILIB_GSON.fromJson(
+        Gson gson = new Gson();
+        Pattern unsupportedFormatPattern = Pattern.compile("%(\\d+\\$)?[\\d.]*[df]");
+        JsonObject entries = gson.fromJson(
                 new InputStreamReader(stream, StandardCharsets.UTF_8),
                 JsonObject.class
         );
@@ -930,7 +932,7 @@ public class MixinLanguage
 
             if (!malilib$checkModIds(id))
             {
-                value = MALILIB_UNSUPPORTED_FORMAT_PATTERN.matcher(value).replaceAll("%$1s");
+                value = unsupportedFormatPattern.matcher(value).replaceAll("%$1s");
             }
 
             output.accept(id, value);
