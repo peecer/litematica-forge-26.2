@@ -162,7 +162,7 @@ def parse_mod_ids(text):
                 in_mod = False
     return result
 
-for module, expected_ids in (("mafglib", {"mafglib"}), ("forgematica", {"forgematica", "litematica"})):
+for module, expected_ids in (("mafglib", {"mafglib", "malilib"}), ("forgematica", {"forgematica", "litematica"})):
     metadata = MODULES[module] / "src/main/resources/META-INF/mods.toml"
     if not metadata.is_file():
         fail(f"{module}: missing META-INF/mods.toml")
@@ -177,6 +177,17 @@ for module, expected_ids in (("mafglib", {"mafglib"}), ("forgematica", {"forgema
 forgematica_meta = (MODULES["forgematica"] / "src/main/resources/META-INF/mods.toml").read_text(encoding="utf-8")
 if not re.search(r'modId\s*=\s*"mafglib"[\s\S]*?ordering\s*=\s*"AFTER"', forgematica_meta):
     fail("forgematica: MaFgLib dependency must load BEFORE Forgematica (ordering=AFTER on the dependency)")
+
+# Loader identity must match the actual Forge port.
+reference = MODULES["mafglib"] / "src/main/java/fi/dy/masa/malilib/MaLiLibReference.java"
+if reference.is_file():
+    reference_text = reference.read_text(encoding="utf-8")
+    if 'MOD_TYPE = "forge"' not in reference_text:
+        fail("MaLiLibReference must identify Forge, not Fabric/NeoForge")
+    if 'MOD_ID = "malilib"' not in reference_text:
+        fail("MaLiLibReference must retain the upstream logical malilib id")
+else:
+    fail("MaLiLibReference.java missing")
 
 # Entry points.
 entrypoints = {
