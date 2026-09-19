@@ -257,7 +257,7 @@ for module, base in MODULES.items():
         "mappings channel: 'official'",
         "accessTransformers = files('src/main/resources/META-INF/accesstransformer.cfg')",
         "annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'",
-        "options.release = 21",
+        "options.release = 25",
     ):
         if needle not in build:
             fail(f"{module}/build.gradle: missing {needle}")
