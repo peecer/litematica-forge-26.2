@@ -95,6 +95,7 @@ cat port/overlay/part*.b64 | tr -d '\r\n' | base64 --decode | gzip --decompress 
 git apply --ignore-space-change --ignore-whitespace --recount "$work/forge-port.patch"
 
 python3 scripts/apply-ci-fixes.py
+python3 tools/generate_mixin_targets.py
 
 # Source JARs may omit runtime resources. Pull only the assets trees from the
 # pinned current upstream commits; loader metadata remains Forge-owned.
