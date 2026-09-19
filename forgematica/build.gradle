@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'eclipse'
     id 'net.minecraftforge.gradle' version '[7.0.29,8.0)'
+    id 'net.minecraftforge.renamer' version '1.0.17'
 }
 
 version = '0.5.0+mc26.2-forge.1'
@@ -12,8 +13,6 @@ base { archivesName = 'litematica-forge-26.2' }
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
-def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.files.collect { it.name }.sort()
-
 minecraft {
     mappings channel: 'official', version: project.minecraft_version
     accessTransformer = true
@@ -21,16 +20,27 @@ minecraft {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
-            mixinConfigs.each { cfg -> args "--mixin.config=${cfg}" }
         }
         register('client')
     }
+}
+
+renamer.mappings(minecraft.dependency.toSrg)
+renamer.enableMixinRefmaps {
+    config 'mixins.litematica.json'
+    refMap = 'mixins.litematica.refmap.json'
 }
 
 repositories {
     minecraft.mavenizer(it)
     maven fg.forgeMaven
     maven fg.minecraftLibsMaven
+    // Needed because the project dependency on MaFgLib carries its bundled
+    // Conditional Mixin implementation on dev/test classpaths.
+    maven {
+        url = 'https://maven.fallenbreath.me/releases'
+        content { includeGroupAndSubgroups('me.fallenbreath') }
+    }
     mavenCentral()
 }
 
@@ -47,8 +57,4 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 25
-}
-
-tasks.named('jar', Jar) {
-    manifest.attributes['MixinConfigs'] = mixinConfigs.join(',')
 }
