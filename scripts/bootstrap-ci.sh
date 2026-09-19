@@ -9,6 +9,8 @@ MAFGLIB_SOURCE_FILE=8829584
 FORGEMATICA_UPSTREAM_SHA=72c1a0f28b409583f14235960798934bf44fc1e3
 MAFGLIB_UPSTREAM_SHA=bf12abb619320631fad4daec32fc658881d331cf
 
+python3 -m py_compile tools/*.py scripts/*.py
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
