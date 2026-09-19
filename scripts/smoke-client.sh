@@ -32,6 +32,17 @@ do
   fi
 done
 
+echo "Verifying Litematica 26.2 shader layout..."
+for shader in \
+  assets/litematica/shaders/core/legacy_terrain.vsh \
+  assets/litematica/shaders/core/legacy_terrain.fsh
+do
+  if ! unzip -l "$LITEMATICA_JAR" | grep -F -q "$shader"; then
+    echo "Missing packaged shader: $shader"
+    exit 1
+  fi
+done
+
 echo "Launching clean Forge client under Xvfb for a bounded smoke test..."
 set +e
 timeout --signal=INT --kill-after=20s 180s \
