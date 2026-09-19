@@ -4,6 +4,7 @@ plugins {
     id 'eclipse'
     id 'net.minecraftforge.gradle' version '[7.0.29,8.0)'
     id 'net.minecraftforge.jarjar' version '0.2.3'
+    id 'net.minecraftforge.renamer' version '1.0.17'
 }
 
 version = '0.5.4+mc26.2-forge.1'
@@ -22,10 +23,15 @@ minecraft {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
             systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
-            mixinConfigs.each { cfg -> args "--mixin.config=${cfg}" }
         }
         register('client')
     }
+}
+
+renamer.mappings(minecraft.dependency.toSrg)
+renamer.enableMixinRefmaps {
+    config 'mixins.malilib.json'
+    refMap = 'mixins.malilib.refmap.json'
 }
 
 repositories {
@@ -50,14 +56,13 @@ jarJar.register() {
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
 
-    // MaFgLib uses Conditional Mixin at runtime. Bundle the Forge variant so users
-    // do not need a third jar just for this implementation detail.
+    // Upstream MaFgLib uses Conditional Mixin. Bundle the Forge implementation so
+    // users only need MaFgLib + Forgematica, not a third support mod.
     implementation(jarJar('me.fallenbreath:conditional-mixin-forge:0.6.4')) {
         transitive = false
     }
 
-    // Iris compatibility is optional. Keep its API compile-only; the compatibility
-    // path only executes when the corresponding mod id is present.
+    // Optional shader compatibility API. It is not bundled into the Forge jar.
     compileOnly 'maven.modrinth:iris:1.11.2+26.2-fabric'
 
     annotationProcessor "net.minecraftforge:eventbus-validator:${project.eventbus_version}"
@@ -74,7 +79,6 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('jar', Jar) {
     archiveClassifier = 'slim'
-    manifest.attributes['MixinConfigs'] = mixinConfigs.join(',')
 }
 
 tasks.named('build') {
