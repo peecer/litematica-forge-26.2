@@ -55,6 +55,11 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+
+          if [ -f ci-output/SMOKE_INFRASTRUCTURE_ASSET_FAILURE ]; then
+            echo "Skipping second client launch because the ForgeGradle headless environment is missing vanilla shader assets."
+            exit 0
+          fi
           rm -rf forgematica/run/logs mafglib/run/logs
           mkdir -p smoke-output
 
