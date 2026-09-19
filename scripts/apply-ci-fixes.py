@@ -276,4 +276,45 @@ text = text.replace(
 )
 language_mixin.write_text(text, encoding="utf-8")
 
+
+
+# Forge Mixin 0.8.7 does not allow arbitrary @Inject points inside a constructor.
+# Move MaLiLib pre-game initialization into the Forge mod entrypoint and remove
+# the illegal Minecraft.<init> INVOKE injection while keeping the RETURN hook.
+entry = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/MaFgLib.java"
+text = entry.read_text(encoding="utf-8")
+if "fi.dy.masa.malilib.event.InitializationHandler" not in text:
+    text = text.replace(
+        "import fi.dy.masa.malilib.compat.modmenu.ModMenuImpl;",
+        "import fi.dy.masa.malilib.compat.modmenu.ModMenuImpl;\nimport fi.dy.masa.malilib.event.InitializationHandler;"
+    )
+if "net.minecraftforge.fml.loading.FMLPaths" not in text:
+    text = text.replace(
+        "import net.minecraftforge.fml.common.Mod;",
+        "import net.minecraftforge.fml.common.Mod;\nimport net.minecraftforge.fml.loading.FMLPaths;"
+    )
+old_init = "        new MaLiLib().onInitialize();"
+new_init = """        new MaLiLib().onInitialize();
+        ((InitializationHandler) InitializationHandler.getInstance()).onPreGameInit(FMLPaths.GAMEDIR.get());"""
+if new_init not in text:
+    if old_init not in text:
+        raise SystemExit("MaFgLib initialization call not found while moving pre-game init")
+    text = text.replace(old_init, new_init, 1)
+entry.write_text(text, encoding="utf-8")
+
+minecraft_mixin = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/client/MixinMinecraft.java"
+text = minecraft_mixin.read_text(encoding="utf-8")
+pre_hook = re.compile(
+    r'\n\s*@Inject\(method = "<init>\(Lnet/minecraft/client/main/GameConfig;\)V",\s*'
+    r'at = @At\(value = "INVOKE",\s*'
+    r'target = "Lnet/minecraft/world/level/storage/LevelStorageSource;parseValidator\(Ljava/nio/file/Path;\)Lnet/minecraft/world/level/validation/DirectoryValidator;"\)\)\s*'
+    r'private void malilib_onPreGameInit\(GameConfig gameConfig, CallbackInfo ci\)\s*'
+    r'\{[\s\S]*?\n\s*\}\n',
+    re.MULTILINE
+)
+text, removed = pre_hook.subn("\n", text, count=1)
+if removed == 0 and "malilib_onPreGameInit" in text:
+    raise SystemExit("Could not remove illegal Minecraft constructor pre-game injection")
+minecraft_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
