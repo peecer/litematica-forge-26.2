@@ -907,10 +907,6 @@ import fi.dy.masa.malilib.config.ConfigManager;
 @Mixin(value = Language.class, priority = 900, remap = false)
 public class MixinLanguage
 {
-    @Unique private static final Gson MALILIB_GSON = new Gson();
-    @Unique private static final Pattern MALILIB_UNSUPPORTED_FORMAT_PATTERN =
-            Pattern.compile("%(\\\\d+\\\\$)?[\\\\d.]*[df]");
-
     @Inject(
             method = "loadFromJson(Ljava/io/InputStream;Ljava/util/function/BiConsumer;)V",
             at = @At("HEAD"),
