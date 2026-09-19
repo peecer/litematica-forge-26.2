@@ -213,7 +213,7 @@ displayName="MaLiLib Stub"
 logoFile="assets/malilib/icon.png"
 authors="masa, CagayakeGirls; Forge port adaptation"
 displayTest="NONE"
-description='''MaLiLib compatibility ID provided by the Forge MaFgLib port.'''
+description="MaLiLib compatibility ID provided by the Forge MaFgLib port."
 
 '''
     anchor = '[[mixins]]\nconfig="mixins.malilib.json"'
