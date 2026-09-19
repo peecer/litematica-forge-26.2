@@ -589,4 +589,185 @@ public abstract class MixinLevelRenderer
 }
 """, encoding="utf-8")
 
+
+
+# Replace MaFgLib's remaining LevelRenderer helper-method injections with
+# Forge 26.2's public AddFramePassEvent. A tiny render-HEAD mixin only captures
+# frame-specific values that the Forge pass API does not expose directly.
+malilib_level_renderer = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelRenderer.java"
+malilib_level_renderer.write_text("""package fi.dy.masa.malilib.mixin.render;
+
+import org.joml.Matrix4fc;
+import org.joml.Vector4f;
+
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;
+
+@Mixin(value = LevelRenderer.class, priority = 900, remap = false)
+public abstract class MixinLevelRenderer
+{
+    @Inject(method = "render", at = @At("HEAD"))
+    private void mafglib$captureRenderState(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker,
+                                            boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix,
+                                            GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky,
+                                            CallbackInfo ci)
+    {
+        ForgeFramePassBridge.capture(modelViewMatrix, terrainFog, fogColor);
+    }
+}
+""", encoding="utf-8")
+
+forge_pass_bridge = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/render/ForgeFramePassBridge.java"
+forge_pass_bridge.parent.mkdir(parents=True, exist_ok=True)
+forge_pass_bridge.write_text("""package team.cagayakegirls.mafglib.render;
+
+import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
+import org.joml.Vector4f;
+
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.framegraph.FramePass;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.resource.ResourceHandle;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.profiling.Profiler;
+import net.minecraftforge.client.FramePassManager;
+import net.minecraftforge.client.event.AddFramePassEvent;
+
+import fi.dy.masa.malilib.event.RenderEventHandler;
+
+public final class ForgeFramePassBridge
+{
+    private static Matrix4fc modelViewMatrix;
+    private static GpuBufferSlice terrainFog;
+    private static Vector4f fogColor;
+
+    private ForgeFramePassBridge() {}
+
+    public static void capture(Matrix4fc matrix, GpuBufferSlice fog, Vector4f color)
+    {
+        modelViewMatrix = new Matrix4f(matrix);
+        terrainFog = fog;
+        fogColor = new Vector4f(color);
+    }
+
+    public static void register(AddFramePassEvent event)
+    {
+        event.addPass(
+                Identifier.fromNamespaceAndPath("mafglib", "world_last"),
+                new FramePassManager.PassDefinition()
+                {
+                    private ResourceHandle<RenderTarget> mainTarget;
+
+                    @Override
+                    public void extracts(LevelTargetBundle bundle, FramePass pass, DeltaTracker deltaTracker)
+                    {
+                        bundle.main = pass.readsAndWrites(bundle.main);
+                        this.mainTarget = bundle.main;
+                    }
+
+                    @Override
+                    public void executes(LevelRenderState state)
+                    {
+                        Matrix4fc matrix = modelViewMatrix;
+                        GpuBufferSlice fog = terrainFog;
+                        Vector4f color = fogColor;
+                        ResourceHandle<RenderTarget> target = this.mainTarget;
+
+                        if (matrix == null || fog == null || color == null || target == null)
+                        {
+                            return;
+                        }
+
+                        Minecraft mc = Minecraft.getInstance();
+                        ((RenderEventHandler) RenderEventHandler.getInstance()).runRenderWorldLastForge(
+                                target.get(),
+                                matrix,
+                                state.cameraRenderState,
+                                mc.gameRenderer.mainCamera().getCullFrustum(),
+                                mc.renderBuffers(),
+                                fog,
+                                color,
+                                Profiler.get()
+                        );
+                    }
+                }
+        );
+    }
+}
+""", encoding="utf-8")
+
+# Add a direct execution path for Forge's native frame pass.
+render_events = root / "mafglib/src/main/java/fi/dy/masa/malilib/event/RenderEventHandler.java"
+text = render_events.read_text(encoding="utf-8")
+marker = """    @ApiStatus.Internal
+    public void runRenderWorldLast(Matrix4fc modelViewMatrix, Minecraft mc,
+"""
+forge_direct = """    @ApiStatus.Internal
+    public void runRenderWorldLastForge(RenderTarget fb, Matrix4fc modelViewMatrix,
+                                        CameraRenderState cameraState, Frustum cullFrustum,
+                                        RenderBuffers buffers, GpuBufferSlice terrainFog,
+                                        Vector4f fogColor, ProfilerFiller profiler)
+    {
+        if (this.worldLastRenderers.isEmpty() == false)
+        {
+            profiler.push(MaLiLibReference.MOD_ID+"_world_last");
+            GpuBufferSlice previousFog = RenderSystem.getShaderFog();
+
+            for (IRenderer renderer : this.worldLastRenderers)
+            {
+                profiler.push(renderer.getProfilerSectionSupplier());
+                renderer.onRenderWorldLast(
+                        fb,
+                        modelViewMatrix,
+                        cameraState,
+                        cullFrustum,
+                        buffers,
+                        terrainFog,
+                        fogColor,
+                        profiler);
+                profiler.pop();
+            }
+
+            RenderSystem.setShaderFog(previousFog);
+            profiler.pop();
+        }
+    }
+
+"""
+if "runRenderWorldLastForge(" not in text:
+    if marker not in text:
+        raise SystemExit("RenderEventHandler world-last insertion point not found")
+    text = text.replace(marker, forge_direct + marker, 1)
+render_events.write_text(text, encoding="utf-8")
+
+# Register the Forge frame pass listener before LevelRenderer is constructed.
+entry = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/MaFgLib.java"
+text = entry.read_text(encoding="utf-8")
+if "net.minecraftforge.client.event.AddFramePassEvent" not in text:
+    text = text.replace(
+        "import net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory;",
+        "import net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory;\\nimport net.minecraftforge.client.event.AddFramePassEvent;\\nimport team.cagayakegirls.mafglib.render.ForgeFramePassBridge;"
+    )
+registration = "        AddFramePassEvent.BUS.addListener(ForgeFramePassBridge::register);"
+if registration not in text:
+    init_line = "        new MaLiLib().onInitialize();"
+    if init_line not in text:
+        raise SystemExit("MaFgLib onInitialize call not found for frame-pass registration")
+    text = text.replace(init_line, registration + "\\n" + init_line, 1)
+entry.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
