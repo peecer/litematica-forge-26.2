@@ -41,6 +41,8 @@ repositories {
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
     implementation project(':mafglib')
+    // MaFgLib bundles Conditional Mixin at runtime; Forgematica only needs its API to compile.
+    compileOnly 'me.fallenbreath:conditional-mixin-forge:0.6.4'
     annotationProcessor "net.minecraftforge:eventbus-validator:${project.eventbus_version}"
     compileOnly 'org.jetbrains:annotations:26.0.2'
     compileOnly 'org.jspecify:jspecify:1.0.0'
