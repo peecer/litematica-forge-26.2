@@ -2,7 +2,8 @@ plugins {
     id 'java'
     id 'idea'
     id 'eclipse'
-    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+    id 'net.minecraftforge.gradle' version '[7.0.29,8.0)'
+    id 'net.minecraftforge.jarjar' version '0.2.3'
 }
 
 version = '0.5.4+mc26.2-forge.1'
@@ -15,6 +16,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.files.collect { it.name }.sort()
 
 minecraft {
+    mappings channel: 'official', version: project.minecraft_version
     accessTransformer = true
     runs {
         configureEach {
@@ -30,11 +32,34 @@ repositories {
     minecraft.mavenizer(it)
     maven fg.forgeMaven
     maven fg.minecraftLibsMaven
+    maven {
+        url = 'https://maven.fallenbreath.me/releases'
+        content { includeGroupAndSubgroups('me.fallenbreath') }
+    }
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup('maven.modrinth') }
+    }
     mavenCentral()
+}
+
+jarJar.register() {
+    archiveClassifier = null
 }
 
 dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+
+    // MaFgLib uses Conditional Mixin at runtime. Bundle the Forge variant so users
+    // do not need a third jar just for this implementation detail.
+    implementation(jarJar('me.fallenbreath:conditional-mixin-forge:0.6.4')) {
+        transitive = false
+    }
+
+    // Iris compatibility is optional. Keep its API compile-only; the compatibility
+    // path only executes when the corresponding mod id is present.
+    compileOnly 'maven.modrinth:iris:1.11.2+26.2-fabric'
+
     annotationProcessor "net.minecraftforge:eventbus-validator:${project.eventbus_version}"
     annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
     compileOnly 'org.jetbrains:annotations:26.0.2'
@@ -48,5 +73,10 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('jar', Jar) {
+    archiveClassifier = 'slim'
     manifest.attributes['MixinConfigs'] = mixinConfigs.join(',')
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('jarJar')
 }
