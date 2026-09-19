@@ -208,7 +208,7 @@ text = maf_mods.read_text(encoding="utf-8")
 if 'modId="malilib"' not in text:
     stub = '''[[mods]]
 modId="malilib"
-version="\${file.jarVersion}"
+version="${file.jarVersion}"
 displayName="MaLiLib Stub"
 logoFile="assets/malilib/icon.png"
 authors="masa, CagayakeGirls; Forge port adaptation"
