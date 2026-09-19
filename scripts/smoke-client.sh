@@ -3,17 +3,34 @@ set -euo pipefail
 
 mkdir -p ci-output
 OUT="ci-output/client-smoke-console.log"
-RUN_LOG="forgematica/run/logs/latest.log"
-rm -rf forgematica/run
-mkdir -p forgematica/run
+RUN_DIR="smoke/run"
+RUN_LOG="$RUN_DIR/logs/latest.log"
 
-echo "Launching Forge development client under Xvfb for a bounded smoke test..."
+rm -rf "$RUN_DIR"
+mkdir -p "$RUN_DIR/mods"
+
+LITEMATICA_JAR="$(find forgematica/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-slim.jar' | head -n 1)"
+MAFGLIB_JAR="$(find mafglib/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-slim.jar' | head -n 1)"
+
+test -n "$LITEMATICA_JAR"
+test -n "$MAFGLIB_JAR"
+
+cp "$LITEMATICA_JAR" "$RUN_DIR/mods/"
+cp "$MAFGLIB_JAR" "$RUN_DIR/mods/"
+
+echo "Smoke-testing packaged jars:"
+ls -lh "$RUN_DIR/mods"
+
+echo "Launching clean Forge client under Xvfb for a bounded smoke test..."
 set +e
-timeout --signal=INT --kill-after=20s 150s   xvfb-run -a   env LIBGL_ALWAYS_SOFTWARE=1   gradle --no-daemon --stacktrace :forgematica:runClient   >"$OUT" 2>&1
+timeout --signal=INT --kill-after=20s 180s \
+  xvfb-run -a \
+  env LIBGL_ALWAYS_SOFTWARE=1 \
+  gradle --no-daemon --stacktrace :smoke:runClient \
+  >"$OUT" 2>&1
 status=$?
 set -e
 
-# Preserve the game log separately if Minecraft created one.
 if [[ -f "$RUN_LOG" ]]; then
   cp "$RUN_LOG" ci-output/client-smoke-latest.log
 fi
@@ -26,14 +43,13 @@ if [[ -f "$RUN_LOG" ]]; then
   cat "$RUN_LOG" >> "$combined"
 fi
 
-# Print the tail into Actions for immediate debugging.
-tail -n 500 "$combined" || true
+tail -n 800 "$combined" || true
 
-fatal_pattern='MixinTransformerError|InvalidMixinException|Mixin apply failed|Critical injection failure|InjectionError|ModLoadingException|Failed to create mod instance|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError|IllegalAccessError|VerifyError|Exception in thread "[^"]+"|java\.lang\.LinkageError|Could not launch|Failed to load mod'
+fatal_pattern='MixinTransformerError|InvalidMixinException|Mixin apply failed|Critical injection failure|InjectionError|ModLoadingException|Failed to create mod instance|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError|IllegalAccessError|VerifyError|Exception in thread "[^"]+"|java\.lang\.LinkageError|Could not launch|Failed to load mod|EarlyLoadingException|Dependency restrictions were not met'
 
 if grep -E -i "$fatal_pattern" "$combined" >/dev/null; then
-  echo "Fatal startup signature detected during Minecraft smoke launch."
-  grep -E -i -n "$fatal_pattern" "$combined" | tail -n 80 || true
+  echo "Fatal startup signature detected during packaged-jar Minecraft smoke launch."
+  grep -E -i -n "$fatal_pattern" "$combined" | tail -n 120 || true
   exit 1
 fi
 
@@ -50,10 +66,17 @@ case "$status" in
     ;;
 esac
 
-# Require evidence that ModLauncher progressed into the actual client, not just Gradle setup.
-if ! grep -E -i 'ModLauncher running|Launching target.*forge_client|Render thread|Reloading ResourceManager|OpenAL initialized|Created:.*atlas|Setting user:' "$combined" >/dev/null; then
+# Require evidence that Forge found both distribution jars and reached client startup.
+for expected in 'litematica-forge-26.2' 'mafglib-forge-26.2'; do
+  if ! grep -F -i "$expected" "$combined" >/dev/null; then
+    echo "Packaged mod $expected was not discovered by Forge during smoke launch."
+    exit 1
+  fi
+done
+
+if ! grep -E -i 'ModLauncher running|Render thread|Reloading ResourceManager|OpenAL initialized|Created:.*atlas|Setting user:' "$combined" >/dev/null; then
   echo "No evidence that Minecraft reached client startup."
   exit 1
 fi
 
-echo "Minecraft client smoke test PASSED."
+echo "Packaged-jar Minecraft client smoke test PASSED."
