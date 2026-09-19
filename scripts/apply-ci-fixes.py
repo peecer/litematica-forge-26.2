@@ -200,4 +200,43 @@ if method_sig in text:
     text = text.replace("// fk u neoforge patch, see: https://github.com/neoforged/NeoForge/pull/3132/changes\n", "")
 itemstack.write_text(text, encoding="utf-8")
 
+
+# Preserve upstream's logical "malilib" stub ID alongside the loader-facing
+# "mafglib" wrapper ID. MaLiLibReference and downstream mods query "malilib".
+maf_mods = root / "mafglib/src/main/resources/META-INF/mods.toml"
+text = maf_mods.read_text(encoding="utf-8")
+if 'modId="malilib"' not in text:
+    stub = '''[[mods]]
+modId="malilib"
+version="\${file.jarVersion}"
+displayName="MaLiLib Stub"
+logoFile="assets/malilib/icon.png"
+authors="masa, CagayakeGirls; Forge port adaptation"
+displayTest="NONE"
+description='''MaLiLib compatibility ID provided by the Forge MaFgLib port.'''
+
+'''
+    anchor = '[[mixins]]\nconfig="mixins.malilib.json"'
+    if anchor not in text:
+        raise SystemExit("MaFgLib mixin metadata anchor not found while adding malilib stub")
+    text = text.replace(anchor, stub + anchor, 1)
+maf_mods.write_text(text, encoding="utf-8")
+
+malilib_stub = root / "mafglib/src/main/java/team/cagayakegirls/mafglib/MalilibCompatMod.java"
+if not malilib_stub.exists():
+    malilib_stub.write_text("""package team.cagayakegirls.mafglib;
+
+import net.minecraftforge.fml.common.Mod;
+
+/**
+ * Compatibility mod id retained from upstream MaFgLib.
+ * Initialization is owned by the mafglib entrypoint.
+ */
+@Mod("malilib")
+public final class MalilibCompatMod
+{
+    public MalilibCompatMod() {}
+}
+""", encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
