@@ -1,0 +1,58 @@
+name: Build Forge 26.2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Reconstruct Forge source tree
+        run: bash scripts/bootstrap-ci.sh
+
+      - name: Build
+        run: gradle --no-daemon --stacktrace build
+
+      - name: Collect build diagnostics
+        if: always()
+        run: |
+          mkdir -p ci-output
+          find . -path '*/build/reports/*' -type f -print -exec cp --parents '{}' ci-output/ \; || true
+
+      - name: Upload JARs
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litematica-forge-26.2-jars
+          if-no-files-found: error
+          path: |
+            mafglib/build/libs/*.jar
+            forgematica/build/libs/*.jar
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-diagnostics
+          if-no-files-found: ignore
+          path: ci-output/
