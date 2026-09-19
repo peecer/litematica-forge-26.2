@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -39,15 +39,54 @@ jobs:
           mkdir -p ci-output
           find . -path '*/build/reports/*' -type f -print -exec cp --parents '{}' ci-output/ \; || true
 
-      - name: Upload JARs
+      - name: Prepare installable release files
+        if: success()
+        run: |
+          set -euo pipefail
+          mkdir -p release
+
+          LITEMATICA_JAR="$(find forgematica/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-slim.jar' | head -n 1)"
+          MAFGLIB_JAR="$(find mafglib/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-sources.jar' ! -name '*-slim.jar' | head -n 1)"
+
+          test -n "$LITEMATICA_JAR"
+          test -n "$MAFGLIB_JAR"
+
+          cp "$LITEMATICA_JAR" release/
+          cp "$MAFGLIB_JAR" release/
+
+          (
+            cd release
+            sha256sum *.jar > SHA256SUMS.txt
+          )
+
+          echo "Release files:"
+          ls -lh release
+
+      - name: Upload Actions artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: litematica-forge-26.2-jars
           if-no-files-found: error
-          path: |
-            mafglib/build/libs/*.jar
-            forgematica/build/libs/*.jar
+          path: release/
+
+      - name: Publish GitHub Release
+        if: success() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TAG="forge-26.2-build-${GITHUB_RUN_NUMBER}"
+          TITLE="Litematica Forge 26.2 build #${GITHUB_RUN_NUMBER}"
+
+          gh release create "$TAG"             release/*.jar             release/SHA256SUMS.txt             --repo "$GITHUB_REPOSITORY"             --target "$GITHUB_SHA"             --title "$TITLE"             --notes "Successful Java 25 build for Minecraft 26.2 + Forge 65.1.0.
+
+Install both JARs from this release in your mods folder:
+- Litematica / Forgematica Forge
+- MaFgLib Forge
+
+The MaFgLib release JAR contains the bundled Conditional Mixin dependency. Do not use a -slim JAR."
 
       - name: Upload diagnostics
         if: failure()
