@@ -100,7 +100,7 @@ for cfg_name, fqcn in configured:
     found: set[str] = set()
 
     # String targets = "a.b.C" or targets = {"a.b.C", "x.y.Z"}
-    targets_match = re.search(r"\btargets\s*=\s*(\{.*?\}|".*?")", body, flags=re.S)
+    targets_match = re.search(r'\btargets\s*=\s*(\{.*?\}|".*?")', body, flags=re.S)
     if targets_match:
         found.update(re.findall(r'"([^"]+)"', targets_match.group(1)))
 
