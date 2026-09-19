@@ -1,0 +1,11 @@
+modLoader="javafml"
+loaderVersion="[65,)"
+license="MIT"
+clientSideOnly=true
+
+[[mods]]
+modId="forgeportsmoke"
+version="1.0.0"
+displayName="Forge Port CI Smoke Harness"
+displayTest="NONE"
+description="CI-only harness that force-loads configured Mixin target classes."
