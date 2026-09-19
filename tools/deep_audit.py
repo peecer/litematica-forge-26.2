@@ -124,8 +124,8 @@ for module, base in MODULES.items():
             continue
         if data.get("required") is not True:
             fail(f"{cfg.relative_to(ROOT)}: required must be true")
-        if data.get("compatibilityLevel") != "JAVA_25":
-            fail(f"{cfg.relative_to(ROOT)}: compatibilityLevel must be JAVA_25")
+        if data.get("compatibilityLevel") != "JAVA_21":
+            fail(f"{cfg.relative_to(ROOT)}: compatibilityLevel must be JAVA_21 for Mixin 0.8.7")
         package = data.get("package", "")
         plugin = data.get("plugin")
         if plugin and plugin not in fqcn:
@@ -143,6 +143,15 @@ for module, base in MODULES.items():
                 if previous != cfg.name:
                     fail(f"{full_name}: listed by both {previous} and {cfg.name}")
         stats["mixin_entries"] += len(seen)
+
+# Minecraft 26.2 has unobfuscated Mojang names at runtime, so mixins must not
+# request legacy obfuscation remapping.
+for path, text in texts.items():
+    if path.suffix != ".java" or "@Mixin(" not in text:
+        continue
+    for annotation in re.findall(r"@Mixin\\((.*?)\\)", text, flags=re.S):
+        if not re.search(r"\\bremap\\s*=\\s*false", annotation):
+            fail(f"{path.relative_to(ROOT)}: all @Mixin declarations must use remap=false on Minecraft 26.2")
 
 # Forge metadata.
 def parse_mod_ids(text):
@@ -248,6 +257,7 @@ for module, base in MODULES.items():
         "mappings channel: 'official'",
         "accessTransformers = files('src/main/resources/META-INF/accesstransformer.cfg')",
         "annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'",
+        "options.release = 21",
     ):
         if needle not in build:
             fail(f"{module}/build.gradle: missing {needle}")
