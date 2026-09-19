@@ -477,4 +477,116 @@ if "@Local(" in text:
     raise SystemExit("MixinLevelRenderer still contains fragile @Local capture")
 level_renderer_mixin.write_text(text, encoding="utf-8")
 
+
+
+# Rebuild MaFgLib's LevelRenderer bridge around vanilla/Forge 26.2 helper
+# methods. NeoForge adds render helper overloads and the staged mixin also
+# relied on MixinExtras locals; both are wrong for Forge 65.1.0.
+malilib_level_renderer = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelRenderer.java"
+malilib_level_renderer.write_text("""package fi.dy.masa.malilib.mixin.render;
+
+import org.joml.Matrix4fc;
+import org.joml.Vector4f;
+
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.framegraph.FrameGraphBuilder;
+import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.client.renderer.RenderBuffers;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.util.profiling.Profiler;
+import net.minecraft.util.profiling.ProfilerFiller;
+import org.spongepowered.asm.mixin.Final;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import fi.dy.masa.malilib.event.RenderEventHandler;
+
+@Mixin(value = LevelRenderer.class, priority = 900, remap = false)
+public abstract class MixinLevelRenderer
+{
+    @Shadow @Final private LevelTargetBundle targets;
+    @Shadow @Final private RenderBuffers renderBuffers;
+    @Shadow @Final private GameRenderer gameRenderer;
+
+    @Unique private CameraRenderState mafglib$cameraState;
+    @Unique private Matrix4fc mafglib$modelViewMatrix;
+    @Unique private Vector4f mafglib$fogColor;
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void mafglib$captureRenderState(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker,
+                                            boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix,
+                                            GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky,
+                                            CallbackInfo ci)
+    {
+        this.mafglib$cameraState = cameraState;
+        this.mafglib$modelViewMatrix = modelViewMatrix;
+        this.mafglib$fogColor = fogColor;
+    }
+
+    @Inject(
+        method = "addWeatherPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V",
+        at = @At("HEAD")
+    )
+    private void mafglib$onRenderWorldPreWeather(FrameGraphBuilder frame, GpuBufferSlice terrainFog, CallbackInfo ci)
+    {
+        if (this.mafglib$cameraState == null || this.mafglib$modelViewMatrix == null || this.mafglib$fogColor == null)
+        {
+            return;
+        }
+
+        ProfilerFiller profiler = Profiler.get();
+        ((RenderEventHandler) RenderEventHandler.getInstance()).runRenderWorldPreWeather(
+                this.mafglib$modelViewMatrix,
+                Minecraft.getInstance(),
+                frame,
+                this.targets,
+                this.gameRenderer.mainCamera().getCullFrustum(),
+                this.mafglib$cameraState,
+                this.renderBuffers,
+                terrainFog,
+                this.mafglib$fogColor,
+                profiler
+        );
+    }
+
+    @Inject(
+        method = "addLateDebugPass(Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;Lnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Matrix4fc;)V",
+        at = @At("HEAD")
+    )
+    private void mafglib$onRenderWorldLast(FrameGraphBuilder frame, CameraRenderState cameraState,
+                                           GpuBufferSlice terrainFog, Matrix4fc modelViewMatrix,
+                                           CallbackInfo ci)
+    {
+        Vector4f fogColor = this.mafglib$fogColor;
+        if (fogColor == null)
+        {
+            return;
+        }
+
+        ProfilerFiller profiler = Profiler.get();
+        ((RenderEventHandler) RenderEventHandler.getInstance()).runRenderWorldLast(
+                modelViewMatrix,
+                Minecraft.getInstance(),
+                frame,
+                this.targets,
+                this.gameRenderer.mainCamera().getCullFrustum(),
+                cameraState,
+                this.renderBuffers,
+                terrainFog,
+                fogColor,
+                profiler
+        );
+    }
+}
+""", encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
