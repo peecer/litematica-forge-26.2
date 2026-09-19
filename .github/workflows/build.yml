@@ -11,7 +11,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,14 +30,28 @@ jobs:
       - name: Reconstruct Forge source tree
         run: bash scripts/bootstrap-ci.sh
 
+      - name: Deep source audit
+        run: python3 tools/deep_audit.py
+
       - name: Build
         run: gradle --no-daemon --stacktrace build
+
+      - name: Install headless graphics runtime
+        run: |
+          if ! command -v xvfb-run >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends xvfb libgl1-mesa-dri mesa-utils
+          fi
+
+      - name: Smoke launch Minecraft client
+        run: bash scripts/smoke-client.sh
 
       - name: Collect build diagnostics
         if: always()
         run: |
           mkdir -p ci-output
           find . -path '*/build/reports/*' -type f -print -exec cp --parents '{}' ci-output/ \; || true
+          if [ -f PORT_AUDIT.md ]; then cp PORT_AUDIT.md ci-output/; fi
 
       - name: Prepare installable release files
         if: success()
@@ -62,6 +76,19 @@ jobs:
           echo "Release files:"
           ls -lh release
 
+      - name: Verify packaged JARs
+        if: success()
+        run: |
+          set -euo pipefail
+          for jar in release/*.jar; do
+            echo "Checking $jar"
+            unzip -tq "$jar"
+            unzip -l "$jar" | grep -q 'META-INF/mods.toml'
+            unzip -l "$jar" | grep -q 'META-INF/accesstransformer.cfg'
+            unzip -p "$jar" META-INF/MANIFEST.MF | grep -q 'MixinConfigs:'
+          done
+          unzip -l release/mafglib-*.jar | grep -q 'META-INF/jarjar/conditional-mixin-forge-0.6.4.jar'
+
       - name: Upload Actions artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -78,7 +105,7 @@ jobs:
           set -euo pipefail
           TAG="forge-26.2-build-${GITHUB_RUN_NUMBER}"
           TITLE="Litematica Forge 26.2 build #${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Successful Java 25 build for Minecraft 26.2 + Forge 65.1.0. Install both JARs from this release. MaFgLib includes the bundled Conditional Mixin dependency."
+          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Passed deep source audit, Java 25 build, package validation, and bounded headless Minecraft client smoke launch for Minecraft 26.2 + Forge 65.1.0. Install both JARs."
 
       - name: Upload diagnostics
         if: failure()
