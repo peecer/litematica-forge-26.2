@@ -17,7 +17,7 @@ def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.fi
 
 minecraft {
     mappings channel: 'official', version: project.minecraft_version
-    accessTransformer = true
+    accessTransformers = files('src/main/resources/META-INF/accesstransformer.cfg')
     runs {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
