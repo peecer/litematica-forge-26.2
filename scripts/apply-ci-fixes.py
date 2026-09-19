@@ -51,4 +51,34 @@ if "public void tickFailures()" not in text:
     text = text.replace(marker, insert + marker, 1)
 servux.write_text(text, encoding="utf-8")
 
+
+# ForgeGradle's multi-project Minecraft transform can be reused between modules.
+# Give both modules the same AT superset so whichever module transforms Minecraft
+# first exposes every member required by MaFgLib and Forgematica.
+maf_at = root / "mafglib/src/main/resources/META-INF/accesstransformer.cfg"
+forg_at = root / "forgematica/src/main/resources/META-INF/accesstransformer.cfg"
+def merge_at_text(*texts):
+    comments = []
+    entries = []
+    seen = set()
+    for source in texts:
+        for line in source.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("#"):
+                if stripped not in comments:
+                    comments.append(stripped)
+            elif stripped not in seen:
+                seen.add(stripped)
+                entries.append(stripped)
+    return "\n".join(comments + entries) + "\n"
+
+merged_at = merge_at_text(
+    maf_at.read_text(encoding="utf-8"),
+    forg_at.read_text(encoding="utf-8"),
+)
+maf_at.write_text(merged_at, encoding="utf-8")
+forg_at.write_text(merged_at, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
