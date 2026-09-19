@@ -133,6 +133,7 @@ jobs:
             unzip -tq "$jar"
             unzip -l "$jar" | grep -q 'META-INF/mods.toml'
             unzip -l "$jar" | grep -q 'META-INF/accesstransformer.cfg'
+            unzip -l "$jar" | grep -q 'pack.mcmeta'
             unzip -p "$jar" META-INF/MANIFEST.MF | grep -q 'MixinConfigs:'
           done
           unzip -l release/mafglib-*.jar | grep -q 'META-INF/jarjar/conditional-mixin-forge-0.6.4.jar'
