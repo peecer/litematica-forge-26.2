@@ -48,6 +48,8 @@ stage_source mafglib "$work/mafglib-sources.jar"
 cat port/overlay/part*.b64 | tr -d '\r\n' | base64 --decode | gzip --decompress > "$work/forge-port.patch"
 git apply --ignore-space-change --ignore-whitespace --recount "$work/forge-port.patch"
 
+python3 scripts/apply-ci-fixes.py
+
 echo "Staged Java files:"
 printf '  Forgematica: '
 find forgematica/src/main/java -type f -name '*.java' | wc -l
