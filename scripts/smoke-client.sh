@@ -118,4 +118,9 @@ if ! grep -E -i 'ModLauncher running|Render thread|Reloading ResourceManager|Ope
   exit 1
 fi
 
+if ! grep -F '[ForgePortSmoke] Successfully force-loaded ' "$combined" >/dev/null; then
+  echo "Smoke harness did not confirm force-loading all configured Mixin targets."
+  exit 1
+fi
+
 echo "Packaged-jar Minecraft client smoke test PASSED."
