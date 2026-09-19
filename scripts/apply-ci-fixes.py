@@ -919,7 +919,7 @@ public class MixinLanguage
     private static void malilib$loadFromJson(InputStream stream, BiConsumer<String, String> output, CallbackInfo ci)
     {
         Gson gson = new Gson();
-        Pattern unsupportedFormatPattern = Pattern.compile("%(\\d+\\$)?[\\d.]*[df]");
+        Pattern unsupportedFormatPattern = Pattern.compile("%([0-9]+[$])?[0-9.]*[df]");
         JsonObject entries = gson.fromJson(
                 new InputStreamReader(stream, StandardCharsets.UTF_8),
                 JsonObject.class
