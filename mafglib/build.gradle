@@ -1,0 +1,52 @@
+plugins {
+    id 'java'
+    id 'idea'
+    id 'eclipse'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+
+version = '0.5.4+mc26.2-forge.1'
+group = 'team.cagayakegirls.forgeport'
+base { archivesName = 'mafglib-forge-26.2' }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.files.collect { it.name }.sort()
+
+minecraft {
+    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+            mixinConfigs.each { cfg -> args "--mixin.config=${cfg}" }
+        }
+        register('client')
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+    annotationProcessor "net.minecraftforge:eventbus-validator:${project.eventbus_version}"
+    annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
+    compileOnly 'org.jetbrains:annotations:26.0.2'
+    compileOnly 'org.jspecify:jspecify:1.0.0'
+    compileOnly 'javax.annotation:javax.annotation-api:1.3.2'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 25
+}
+
+tasks.named('jar', Jar) {
+    manifest.attributes['MixinConfigs'] = mixinConfigs.join(',')
+}
