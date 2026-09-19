@@ -10,4 +10,4 @@ plugins {
 }
 
 rootProject.name = 'litematica-forge-26.2'
-include 'mafglib', 'forgematica'
+include 'mafglib', 'forgematica', 'smoke'
