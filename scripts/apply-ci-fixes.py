@@ -239,4 +239,29 @@ public final class MalilibCompatMod
 }
 """, encoding="utf-8")
 
+
+# Mixin 0.8.7 recognizes compatibility levels only through JAVA_21.
+# Run on JDK 25 but emit Java 21-compatible mod/mixin bytecode.
+for module in ("mafglib", "forgematica"):
+    mixin_cfg = root / module / "src/main/resources" / f"mixins.{'malilib' if module == 'mafglib' else 'litematica'}.json"
+    cfg_text = mixin_cfg.read_text(encoding="utf-8")
+    cfg_text = cfg_text.replace('"compatibilityLevel": "JAVA_25"', '"compatibilityLevel": "JAVA_21"')
+    mixin_cfg.write_text(cfg_text, encoding="utf-8")
+
+# Java 22 introduced unnamed variables/patterns. The upstream 26.2 source uses
+# them in only a few places; name them explicitly so the complete mod can emit
+# Java 21 class files which Mixin 0.8.7 can transform safely.
+java21_replacements = {
+    "catch (Exception _) {}": "catch (Exception ignored) {}",
+    "((_, screen) ->": "((ignoredMinecraft, screen) ->",
+}
+for module in ("mafglib", "forgematica"):
+    for path in (root / module / "src/main/java").rglob("*.java"):
+        source = path.read_text(encoding="utf-8")
+        rewritten = source
+        for old, new in java21_replacements.items():
+            rewritten = rewritten.replace(old, new)
+        if rewritten != source:
+            path.write_text(rewritten, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
