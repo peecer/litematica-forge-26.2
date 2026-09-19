@@ -154,6 +154,19 @@ for path, text in texts.items():
         if not re.search(r"\\bremap\\s*=\\s*false", annotation):
             fail(f"{path.relative_to(ROOT)}: all @Mixin declarations must use remap=false on Minecraft 26.2")
 
+# MixinExtras local-capture audit. These are not automatically illegal, but
+# they are fragile on Forge's Mixin 0.8.7 and must be explicitly accounted for.
+local_capture_sites = []
+for path, text in texts.items():
+    if path.suffix != ".java" or "@Local" not in text:
+        continue
+    for number, line in enumerate(text.splitlines(), 1):
+        if "@Local" in line:
+            local_capture_sites.append(f"{path.relative_to(ROOT)}:{number}: {line.strip()}")
+stats["mixin_local_captures"] = len(local_capture_sites)
+for site in local_capture_sites:
+    warnings.append("MixinExtras local capture: " + site)
+
 # Forge metadata.
 def parse_mod_ids(text):
     result = []
@@ -305,6 +318,7 @@ print(
 )
 print(
     f"Mixins checked: {stats['mixin_entries']}; "
+    f"MixinExtras @Local captures: {stats['mixin_local_captures']}; "
     f"AT rules: mafglib={stats['at_mafglib']}, forgematica={stats['at_forgematica']}."
 )
 if warnings:
