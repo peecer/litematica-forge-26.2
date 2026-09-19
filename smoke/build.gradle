@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '[7.0.29,8.0)'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+minecraft {
+    mappings channel: 'official', version: project.minecraft_version
+    runs {
+        register('client') {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'eventbus.api.strictRuntimeChecks', 'true'
+        }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${project.minecraft_version}-${project.forge_version}")
+}
