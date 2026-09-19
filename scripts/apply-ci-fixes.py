@@ -605,8 +605,11 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -616,13 +619,15 @@ import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;
 @Mixin(value = LevelRenderer.class, priority = 900, remap = false)
 public abstract class MixinLevelRenderer
 {
+    @Shadow @Final private RenderBuffers renderBuffers;
+
     @Inject(method = "render", at = @At("HEAD"))
     private void mafglib$captureRenderState(GraphicsResourceAllocator resourceAllocator, DeltaTracker deltaTracker,
                                             boolean renderOutline, CameraRenderState cameraState, Matrix4fc modelViewMatrix,
                                             GpuBufferSlice terrainFog, Vector4f fogColor, boolean shouldRenderSky,
                                             CallbackInfo ci)
     {
-        ForgeFramePassBridge.capture(modelViewMatrix, terrainFog, fogColor);
+        ForgeFramePassBridge.capture(modelViewMatrix, terrainFog, fogColor, this.renderBuffers);
     }
 }
 """, encoding="utf-8")
@@ -642,6 +647,7 @@ import com.mojang.blaze3d.resource.ResourceHandle;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelTargetBundle;
+import net.minecraft.client.renderer.RenderBuffers;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.profiling.Profiler;
@@ -655,14 +661,16 @@ public final class ForgeFramePassBridge
     private static Matrix4fc modelViewMatrix;
     private static GpuBufferSlice terrainFog;
     private static Vector4f fogColor;
+    private static RenderBuffers renderBuffers;
 
     private ForgeFramePassBridge() {}
 
-    public static void capture(Matrix4fc matrix, GpuBufferSlice fog, Vector4f color)
+    public static void capture(Matrix4fc matrix, GpuBufferSlice fog, Vector4f color, RenderBuffers buffers)
     {
         modelViewMatrix = new Matrix4f(matrix);
         terrainFog = fog;
         fogColor = new Vector4f(color);
+        renderBuffers = buffers;
     }
 
     public static void register(AddFramePassEvent event)
@@ -686,9 +694,10 @@ public final class ForgeFramePassBridge
                         Matrix4fc matrix = modelViewMatrix;
                         GpuBufferSlice fog = terrainFog;
                         Vector4f color = fogColor;
+                        RenderBuffers buffers = renderBuffers;
                         ResourceHandle<RenderTarget> target = this.mainTarget;
 
-                        if (matrix == null || fog == null || color == null || target == null)
+                        if (matrix == null || fog == null || color == null || buffers == null || target == null)
                         {
                             return;
                         }
@@ -699,7 +708,7 @@ public final class ForgeFramePassBridge
                                 matrix,
                                 state.cameraRenderState,
                                 mc.gameRenderer.mainCamera().getCullFrustum(),
-                                mc.renderBuffers(),
+                                buffers,
                                 fog,
                                 color,
                                 Profiler.get()
