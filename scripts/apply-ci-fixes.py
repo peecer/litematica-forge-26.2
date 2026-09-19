@@ -866,4 +866,74 @@ if "@Local(" in text:
     raise SystemExit("Litematica MixinGameRenderer still contains @Local capture")
 game_renderer_mixin.write_text(text, encoding="utf-8")
 
+
+
+# Hook the actual FrameGraphBuilder.execute call for MaFgLib's "world last"
+# callback. This avoids guessing a 26.2 debug-helper method name and avoids
+# local capture entirely: @Redirect receives the frame graph and allocator as
+# real invocation arguments. The render-state values are captured at render HEAD.
+malilib_level_renderer = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelRenderer.java"
+text = malilib_level_renderer.read_text(encoding="utf-8")
+if "org.spongepowered.asm.mixin.injection.Redirect;" not in text:
+    text = text.replace(
+        "import org.spongepowered.asm.mixin.injection.Inject;",
+        "import org.spongepowered.asm.mixin.injection.Inject;\nimport org.spongepowered.asm.mixin.injection.Redirect;"
+    )
+if "@Unique private GpuBufferSlice mafglib$terrainFog;" not in text:
+    text = text.replace(
+        "@Unique private Vector4f mafglib$fogColor;",
+        "@Unique private Vector4f mafglib$fogColor;\n    @Unique private GpuBufferSlice mafglib$terrainFog;"
+    )
+text = text.replace(
+    "        this.mafglib$fogColor = fogColor;",
+    "        this.mafglib$fogColor = fogColor;\n        this.mafglib$terrainFog = terrainFog;",
+    1
+)
+
+old_world_last = re.compile(
+    r'\n\s*@Inject\(\s*'
+    r'method = "addLateDebugPass[^"]*",[\s\S]*?'
+    r'private void mafglib\$onRenderWorldLast\([\s\S]*?\n\s*\}\n',
+    re.MULTILINE
+)
+replacement = """
+    @Redirect(
+        method = "render",
+        at = @At(
+            value = "INVOKE",
+            target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;)V"
+        )
+    )
+    private void mafglib$executeFrameGraphWithWorldLast(FrameGraphBuilder frame, GraphicsResourceAllocator allocator)
+    {
+        CameraRenderState cameraState = this.mafglib$cameraState;
+        Matrix4fc modelViewMatrix = this.mafglib$modelViewMatrix;
+        Vector4f fogColor = this.mafglib$fogColor;
+        GpuBufferSlice terrainFog = this.mafglib$terrainFog;
+
+        if (cameraState != null && modelViewMatrix != null && fogColor != null && terrainFog != null)
+        {
+            ProfilerFiller profiler = Profiler.get();
+            ((RenderEventHandler) RenderEventHandler.getInstance()).runRenderWorldLast(
+                    modelViewMatrix,
+                    Minecraft.getInstance(),
+                    frame,
+                    this.targets,
+                    this.gameRenderer.mainCamera().getCullFrustum(),
+                    cameraState,
+                    this.renderBuffers,
+                    terrainFog,
+                    fogColor,
+                    profiler
+            );
+        }
+
+        frame.execute(allocator);
+    }
+"""
+text, replaced = old_world_last.subn("\n" + replacement, text, count=1)
+if replaced == 0 and "mafglib$onRenderWorldLast" in text:
+    raise SystemExit("Could not replace MaFgLib world-last helper injection")
+malilib_level_renderer.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
