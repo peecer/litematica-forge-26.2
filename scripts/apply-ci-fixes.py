@@ -153,4 +153,51 @@ if mixin_remap_changes < 100:
     raise SystemExit(f"Expected to mark at least 100 mixins remap=false, changed {mixin_remap_changes}")
 print(f"Marked {mixin_remap_changes} Minecraft 26.2 mixins remap=false")
 
+
+# Correct MaFgLib's loader identity and IDE/development detection for Forge.
+reference = root / "mafglib/src/main/java/fi/dy/masa/malilib/MaLiLibReference.java"
+text = reference.read_text(encoding="utf-8")
+text = text.replace('public static final String MOD_TYPE = "fabric";',
+                    'public static final String MOD_TYPE = "forge";')
+if "team.cagayakegirls.mafglib.utils.ModPlatform" not in text:
+    text = text.replace("import fi.dy.masa.malilib.util.StringUtils;",
+                        "import fi.dy.masa.malilib.util.StringUtils;\nimport team.cagayakegirls.mafglib.utils.ModPlatform;")
+start = text.find("\tprivate static boolean isRunningInIde()")
+if start >= 0:
+    brace = text.find("{", start)
+    depth = 0
+    end = brace
+    while end < len(text):
+        if text[end] == "{":
+            depth += 1
+        elif text[end] == "}":
+            depth -= 1
+            if depth == 0:
+                end += 1
+                break
+        end += 1
+    replacement = """\tprivate static boolean isRunningInIde()
+\t{
+\t\treturn ModPlatform.isDevelopmentEnvironment();
+\t}"""
+    text = text[:start] + replacement + text[end:]
+reference.write_text(text, encoding="utf-8")
+
+# NeoForge splits ItemStack tooltip generation into an extra private method.
+# Forge 26.2 does not have that NeoForge-only injection target. Keep MaLiLib's
+# final tooltip callback on the vanilla/Forge addDetailsToTooltip method tail.
+itemstack = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/item/MixinItemStack.java"
+text = itemstack.read_text(encoding="utf-8")
+method_sig = 'addDetailsToTooltipComponents(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;)V'
+if method_sig in text:
+    text = text.replace(method_sig,
+        'addDetailsToTooltip(Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/item/TooltipFlag;Ljava/util/function/Consumer;)V')
+    old_at = """at = @At(value = "INVOKE",
+                     target = "Lnet/minecraft/world/item/ItemStack;addToTooltip(Lnet/minecraft/core/component/DataComponentType;Lnet/minecraft/world/item/Item$TooltipContext;Lnet/minecraft/world/item/component/TooltipDisplay;Ljava/util/function/Consumer;Lnet/minecraft/world/item/TooltipFlag;)V",
+                     ordinal = 23,
+                     shift = At.Shift.AFTER)"""
+    text = text.replace(old_at, 'at = @At("TAIL")')
+    text = text.replace("// fk u neoforge patch, see: https://github.com/neoforged/NeoForge/pull/3132/changes\n", "")
+itemstack.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
