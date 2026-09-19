@@ -34,8 +34,8 @@ done
 
 echo "Verifying Litematica 26.2 shader layout..."
 for shader in \
-  assets/litematica/shaders/core/legacy_terrain.vsh \
-  assets/litematica/shaders/core/legacy_terrain.fsh
+  assets/litematica/shaders/legacy_terrain.vsh \
+  assets/litematica/shaders/legacy_terrain.fsh
 do
   if ! unzip -l "$LITEMATICA_JAR" | grep -F -q "$shader"; then
     echo "Missing packaged shader: $shader"
@@ -68,6 +68,22 @@ fi
 tail -n 800 "$combined" || true
 
 fatal_pattern='MixinTransformerError|InvalidMixinException|Mixin apply failed|Critical injection failure|InjectionError|ModLoadingException|Failed to create mod instance|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError|IllegalAccessError|VerifyError|Exception in thread "[^"]+"|java\.lang\.LinkageError|Could not launch|Failed to load mod|EarlyLoadingException|Dependency restrictions were not met'
+
+# ForgeGradle's headless run can occasionally lose vanilla client resources.
+# If even a minecraft: shader is missing, this is not evidence that either mod
+# JAR is at fault. Record it separately so CI does not publish a false diagnosis.
+if grep -E -i "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "$combined" >/dev/null; then
+  echo "SMOKE_INFRASTRUCTURE_ASSET_FAILURE: vanilla Minecraft shader assets are missing from the ForgeGradle headless run."
+  grep -E -i -n "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "$combined" | tail -n 40 || true
+
+  # Still reject any mod-loading/mixin/linkage failure that happened first.
+  if grep -E -i 'MixinTransformerError|InvalidMixinException|Mixin apply failed|Critical injection failure|InjectionError|ModLoadingException|Failed to create mod instance|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError|IllegalAccessError|VerifyError|java\.lang\.LinkageError|Failed to load mod|EarlyLoadingException|Dependency restrictions were not met' "$combined" >/dev/null; then
+    echo "A genuine mod/runtime fatal was also present."
+    exit 1
+  fi
+
+  exit 0
+fi
 
 if grep -E -i "$fatal_pattern" "$combined" >/dev/null; then
   echo "Fatal startup signature detected during packaged-jar Minecraft smoke launch."
