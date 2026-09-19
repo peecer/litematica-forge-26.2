@@ -382,4 +382,19 @@ if "@Local(" in text:
     raise SystemExit("MaFgLib LevelExtractor still contains @Local capture")
 malilib_level_extractor.write_text(text, encoding="utf-8")
 
+
+
+# Forge 26.2's LevelExtractor.extractVisibleBlockEntities includes an explicit
+# Frustum parameter. NeoForge's staged source handler omitted it, which makes
+# Mixin reject the callback descriptor at runtime.
+litematica_level_extractor = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinLevelExtractor.java"
+text = litematica_level_extractor.read_text(encoding="utf-8")
+old_sig = """private void litematica_onPostPrepareBlockEntities(Camera camera, float deltaPartialTick, LevelRenderState levelRenderState, CallbackInfo ci)"""
+new_sig = """private void litematica_onPostPrepareBlockEntities(Camera camera, float deltaPartialTick, LevelRenderState levelRenderState, Frustum cullFrustum, CallbackInfo ci)"""
+if old_sig in text:
+    text = text.replace(old_sig, new_sig, 1)
+elif new_sig not in text:
+    raise SystemExit("Could not update Litematica extractVisibleBlockEntities callback signature")
+litematica_level_extractor.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
