@@ -74,6 +74,7 @@ fatal_pattern='MixinTransformerError|InvalidMixinException|Mixin apply failed|Cr
 # JAR is at fault. Record it separately so CI does not publish a false diagnosis.
 if grep -E -i "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "$combined" >/dev/null; then
   echo "SMOKE_INFRASTRUCTURE_ASSET_FAILURE: vanilla Minecraft shader assets are missing from the ForgeGradle headless run."
+  touch ci-output/SMOKE_INFRASTRUCTURE_ASSET_FAILURE
   grep -E -i -n "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "$combined" | tail -n 40 || true
 
   # Still reject any mod-loading/mixin/linkage failure that happened first.
