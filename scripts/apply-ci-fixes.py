@@ -839,6 +839,11 @@ for section in ("mixins", "client", "server"):
         cfg[section] = [name for name in cfg[section] if name != "gui.MixinGui"]
 mixin_cfg.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
+old_gui_mixin = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/gui/MixinGui.java"
+if old_gui_mixin.exists():
+    old_gui_mixin.unlink()
+
+
 
 # Remove Litematica's CameraRenderState @Local capture. GameRenderer exposes its
 # GameRenderState, whose LevelRenderState contains the extracted camera state.
@@ -868,72 +873,142 @@ game_renderer_mixin.write_text(text, encoding="utf-8")
 
 
 
-# Hook the actual FrameGraphBuilder.execute call for MaFgLib's "world last"
-# callback. This avoids guessing a 26.2 debug-helper method name and avoids
-# local capture entirely: @Redirect receives the frame graph and allocator as
-# real invocation arguments. The render-state values are captured at render HEAD.
-malilib_level_renderer = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelRenderer.java"
-text = malilib_level_renderer.read_text(encoding="utf-8")
-if "org.spongepowered.asm.mixin.injection.Redirect;" not in text:
-    text = text.replace(
-        "import org.spongepowered.asm.mixin.injection.Inject;",
-        "import org.spongepowered.asm.mixin.injection.Inject;\nimport org.spongepowered.asm.mixin.injection.Redirect;"
-    )
-if "@Unique private GpuBufferSlice mafglib$terrainFog;" not in text:
-    text = text.replace(
-        "@Unique private Vector4f mafglib$fogColor;",
-        "@Unique private Vector4f mafglib$fogColor;\n    @Unique private GpuBufferSlice mafglib$terrainFog;"
-    )
-text = text.replace(
-    "        this.mafglib$fogColor = fogColor;",
-    "        this.mafglib$fogColor = fogColor;\n        this.mafglib$terrainFog = terrainFog;",
-    1
-)
 
-old_world_last = re.compile(
-    r'\n\s*@Inject\(\s*'
-    r'method = "addLateDebugPass[^"]*",[\s\S]*?'
-    r'private void mafglib\$onRenderWorldLast\([\s\S]*?\n\s*\}\n',
-    re.MULTILINE
-)
-replacement = """
-    @Redirect(
-        method = "render",
-        at = @At(
-            value = "INVOKE",
-            target = "Lcom/mojang/blaze3d/framegraph/FrameGraphBuilder;execute(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;)V"
-        )
+
+# Eliminate the remaining active MixinExtras @Local captures. Forge 65.1.0
+# ships Mixin 0.8.7, and local-table capture has already caused multiple
+# runtime transformer crashes in this port.
+
+language_mixin = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/client/MixinLanguage.java"
+language_mixin.write_text("""package fi.dy.masa.malilib.mixin.client;
+
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+
+import net.minecraft.locale.Language;
+import net.minecraft.util.GsonHelper;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import fi.dy.masa.malilib.config.ConfigManager;
+
+@Mixin(value = Language.class, priority = 900, remap = false)
+public class MixinLanguage
+{
+    @Unique private static final Gson MALILIB_GSON = new Gson();
+    @Unique private static final Pattern MALILIB_UNSUPPORTED_FORMAT_PATTERN =
+            Pattern.compile("%(\\\\d+\\\\$)?[\\\\d.]*[df]");
+
+    @Inject(
+            method = "loadFromJson(Ljava/io/InputStream;Ljava/util/function/BiConsumer;)V",
+            at = @At("HEAD"),
+            cancellable = true
     )
-    private void mafglib$executeFrameGraphWithWorldLast(FrameGraphBuilder frame, GraphicsResourceAllocator allocator)
+    private static void malilib$loadFromJson(InputStream stream, BiConsumer<String, String> output, CallbackInfo ci)
     {
-        CameraRenderState cameraState = this.mafglib$cameraState;
-        Matrix4fc modelViewMatrix = this.mafglib$modelViewMatrix;
-        Vector4f fogColor = this.mafglib$fogColor;
-        GpuBufferSlice terrainFog = this.mafglib$terrainFog;
+        JsonObject entries = MALILIB_GSON.fromJson(
+                new InputStreamReader(stream, StandardCharsets.UTF_8),
+                JsonObject.class
+        );
 
-        if (cameraState != null && modelViewMatrix != null && fogColor != null && terrainFog != null)
+        for (Map.Entry<String, JsonElement> entry : entries.entrySet())
         {
-            ProfilerFiller profiler = Profiler.get();
-            ((RenderEventHandler) RenderEventHandler.getInstance()).runRenderWorldLast(
-                    modelViewMatrix,
-                    Minecraft.getInstance(),
-                    frame,
-                    this.targets,
-                    this.gameRenderer.mainCamera().getCullFrustum(),
-                    cameraState,
-                    this.renderBuffers,
-                    terrainFog,
-                    fogColor,
-                    profiler
-            );
+            String id = entry.getKey();
+            String value = GsonHelper.convertToString(entry.getValue(), id);
+
+            if (!malilib$checkModIds(id))
+            {
+                value = MALILIB_UNSUPPORTED_FORMAT_PATTERN.matcher(value).replaceAll("%$1s");
+            }
+
+            output.accept(id, value);
         }
 
-        frame.execute(allocator);
+        ci.cancel();
     }
-"""
-text, replaced = old_world_last.subn("\n" + replacement, text, count=1)
-if replaced == 0 and "mafglib$onRenderWorldLast" in text:
-    raise SystemExit("Could not replace MaFgLib world-last helper injection")
-malilib_level_renderer.write_text(text, encoding="utf-8")
+
+    @Unique
+    private static boolean malilib$checkModIds(String id)
+    {
+        Set<String> modIdSet = ((ConfigManager) ConfigManager.getInstance()).modIdSet();
+
+        for (String modId : modIdSet)
+        {
+            if (id.startsWith(modId + "."))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+""", encoding="utf-8")
+
+configuration_mixin = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/network/MixinClientConfigurationPacketListenerImpl.java"
+configuration_mixin.write_text("""package fi.dy.masa.malilib.mixin.network;
+
+import net.minecraft.client.multiplayer.ClientConfigurationPacketListenerImpl;
+import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.Connection;
+import net.minecraft.network.PacketListener;
+import net.minecraft.network.ProtocolInfo;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Redirect;
+
+import fi.dy.masa.malilib.event.WorldLoadHandler;
+
+@Mixin(value = ClientConfigurationPacketListenerImpl.class, priority = 900, remap = false)
+public class MixinClientConfigurationPacketListenerImpl
+{
+    @Redirect(
+            method = "handleConfigurationFinished",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/network/Connection;setupInboundProtocol(Lnet/minecraft/network/ProtocolInfo;Lnet/minecraft/network/PacketListener;)V"
+            )
+    )
+    private void malilib$setupInboundProtocol(Connection connection, ProtocolInfo<?> protocol, PacketListener listener)
+    {
+        if (listener instanceof ClientPacketListener playListener)
+        {
+            ((WorldLoadHandler) WorldLoadHandler.getInstance()).onWorldLoadImmutable(playListener.registryAccess());
+        }
+
+        malilib$callSetupInboundProtocol(connection, protocol, listener);
+    }
+
+    @Unique
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static void malilib$callSetupInboundProtocol(Connection connection, ProtocolInfo protocol, PacketListener listener)
+    {
+        connection.setupInboundProtocol(protocol, listener);
+    }
+}
+""", encoding="utf-8")
+
+# No raw @Local captures are permitted in the reconstructed Forge source.
+remaining_local_captures = []
+for module in ("mafglib", "forgematica"):
+    for path in (root / module / "src/main/java").rglob("*.java"):
+        source = path.read_text(encoding="utf-8")
+        if "@Local" in source:
+            remaining_local_captures.append(str(path.relative_to(root)))
+if remaining_local_captures:
+    raise SystemExit("Remaining @Local captures: " + ", ".join(remaining_local_captures))
 
 print("Applied Forge 26.2 post-overlay source fixes")
