@@ -760,14 +760,14 @@ text = entry.read_text(encoding="utf-8")
 if "net.minecraftforge.client.event.AddFramePassEvent" not in text:
     text = text.replace(
         "import net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory;",
-        "import net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory;\\nimport net.minecraftforge.client.event.AddFramePassEvent;\\nimport team.cagayakegirls.mafglib.render.ForgeFramePassBridge;"
+        "import net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory;\nimport net.minecraftforge.client.event.AddFramePassEvent;\nimport team.cagayakegirls.mafglib.render.ForgeFramePassBridge;"
     )
 registration = "        AddFramePassEvent.BUS.addListener(ForgeFramePassBridge::register);"
 if registration not in text:
     init_line = "        new MaLiLib().onInitialize();"
     if init_line not in text:
         raise SystemExit("MaFgLib onInitialize call not found for frame-pass registration")
-    text = text.replace(init_line, registration + "\\n" + init_line, 1)
+    text = text.replace(init_line, registration + "\n" + init_line, 1)
 entry.write_text(text, encoding="utf-8")
 
 
@@ -806,19 +806,19 @@ text = entry.read_text(encoding="utf-8")
 if "net.minecraftforge.client.event.AddGuiOverlayLayersEvent" not in text:
     text = text.replace(
         "import net.minecraftforge.client.event.AddFramePassEvent;",
-        "import net.minecraftforge.client.event.AddFramePassEvent;\\nimport net.minecraftforge.client.event.AddGuiOverlayLayersEvent;"
+        "import net.minecraftforge.client.event.AddFramePassEvent;\nimport net.minecraftforge.client.event.AddGuiOverlayLayersEvent;"
     )
 if "team.cagayakegirls.mafglib.render.ForgeGuiOverlayBridge" not in text:
     text = text.replace(
         "import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;",
-        "import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;\\nimport team.cagayakegirls.mafglib.render.ForgeGuiOverlayBridge;"
+        "import team.cagayakegirls.mafglib.render.ForgeFramePassBridge;\nimport team.cagayakegirls.mafglib.render.ForgeGuiOverlayBridge;"
     )
 gui_registration = "        AddGuiOverlayLayersEvent.BUS.addListener(ForgeGuiOverlayBridge::register);"
 if gui_registration not in text:
     frame_registration = "        AddFramePassEvent.BUS.addListener(ForgeFramePassBridge::register);"
     if frame_registration not in text:
         raise SystemExit("Frame-pass listener registration anchor missing")
-    text = text.replace(frame_registration, frame_registration + "\\n" + gui_registration, 1)
+    text = text.replace(frame_registration, frame_registration + "\n" + gui_registration, 1)
 entry.write_text(text, encoding="utf-8")
 
 # Remove the old Gui local-capture mixin from the active config.
@@ -827,16 +827,16 @@ cfg = json.loads(mixin_cfg.read_text(encoding="utf-8"))
 for section in ("mixins", "client", "server"):
     if section in cfg:
         cfg[section] = [name for name in cfg[section] if name != "gui.MixinGui"]
-mixin_cfg.write_text(json.dumps(cfg, indent=2) + "\\n", encoding="utf-8")
+mixin_cfg.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
 
 # Remove Litematica's CameraRenderState @Local capture. GameRenderer exposes its
 # GameRenderState, whose LevelRenderState contains the extracted camera state.
 game_renderer_mixin = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinGameRenderer.java"
 text = game_renderer_mixin.read_text(encoding="utf-8")
-text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\\n\\n", "")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n\n", "")
 if "import net.minecraft.client.Minecraft;" not in text:
-    text = text.replace("import net.minecraft.client.DeltaTracker;", "import net.minecraft.client.DeltaTracker;\\nimport net.minecraft.client.Minecraft;")
+    text = text.replace("import net.minecraft.client.DeltaTracker;", "import net.minecraft.client.DeltaTracker;\nimport net.minecraft.client.Minecraft;")
 text = re.sub(
     r'private void litematica_updateCameraState\\(DeltaTracker deltaTracker, float worldPartialTicks, float cameraEntityPartialTicks, CallbackInfo ci,\\s*'
     r'@Local\\(name = "cameraState"\\) CameraRenderState cameraState\\)',
