@@ -1013,12 +1013,12 @@ if remaining_local_captures:
 
 # Forge exposes a mod JAR's assets through its resource-pack loader. The
 # upstream NeoForge source tree does not ship pack.mcmeta, so generate explicit
-# Minecraft 26.2 client resource-pack metadata (format 85.0) for both modules.
+# Minecraft 26.2 client resource-pack metadata (format 88.0) for both modules.
 pack_meta = """{
   "pack": {
     "description": "Forge 26.2 mod resources",
-    "min_format": [85, 0],
-    "max_format": [85, 0]
+    "min_format": [88, 0],
+    "max_format": [88, 0]
   }
 }
 """
