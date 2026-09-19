@@ -264,4 +264,16 @@ for module in ("mafglib", "forgematica"):
         if rewritten != source:
             path.write_text(rewritten, encoding="utf-8")
 
+
+# NeoForge adds a 3-argument Language.loadFromJson overload for component
+# translations. Forge 26.2 keeps vanilla's 2-argument method. Retarget the
+# MaLiLib translation-format mixin to the vanilla/Forge method.
+language_mixin = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/client/MixinLanguage.java"
+text = language_mixin.read_text(encoding="utf-8")
+text = text.replace(
+    'loadFromJson(Ljava/io/InputStream;Ljava/util/function/BiConsumer;Ljava/util/function/BiConsumer;)V',
+    'loadFromJson(Ljava/io/InputStream;Ljava/util/function/BiConsumer;)V'
+)
+language_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
