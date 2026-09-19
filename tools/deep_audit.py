@@ -6,6 +6,7 @@ from collections import Counter
 import json
 import re
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULES = {"mafglib": ROOT / "mafglib", "forgematica": ROOT / "forgematica"}
@@ -177,6 +178,10 @@ for module, expected_ids in (("mafglib", {"mafglib", "malilib"}), ("forgematica"
         fail(f"{module}: missing META-INF/mods.toml")
         continue
     text = metadata.read_text(encoding="utf-8")
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        fail(f"{module}: invalid mods.toml: {exc}")
     if set(parse_mod_ids(text)) != expected_ids:
         fail(f"{module}: unexpected mod IDs {parse_mod_ids(text)}")
     for needle in ('loaderVersion="[65,)"', 'clientSideOnly=true', 'versionRange="[26.2,26.3)"'):
