@@ -82,7 +82,7 @@ def resolve_class_expr(expr: str, imports: dict[str, str], wildcards: list[str],
         return wildcard_candidates
 
     # Same-package fallback.
-    return [f"{package}.{expr.replace('.', '
+    return [f"{package}.{expr.replace('.', '$')}" if package else expr]
 configured = []
 source_by_fqcn = {}
 for module in MODULES:
