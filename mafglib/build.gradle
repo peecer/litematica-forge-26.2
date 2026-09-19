@@ -15,7 +15,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 def mixinConfigs = fileTree('src/main/resources') { include 'mixins.*.json' }.files.collect { it.name }.sort()
 
 minecraft {
-    accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
+    accessTransformer = true
     runs {
         configureEach {
             workingDir = layout.projectDirectory.dir('run')
