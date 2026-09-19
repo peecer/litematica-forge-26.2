@@ -25,4 +25,30 @@ elif count == 0:
     new_text = text
 mods.write_text(new_text, encoding="utf-8")
 
+
+# Complete the loader-neutral payload contract for the Servux handler.
+servux = root / "forgematica/src/main/java/fi/dy/masa/litematica/network/ServuxLitematicaHandler.java"
+text = servux.read_text(encoding="utf-8")
+marker = """    @Override
+    public void encodeWithSplitter(FriendlyByteBuf buffer, ClientPacketListener handler)
+"""
+if "public void tickFailures()" not in text:
+    insert = """    @Override
+    public void tickFailures()
+    {
+        this.failures++;
+    }
+
+    @Override
+    public boolean checkFailures()
+    {
+        return this.failures <= MAX_FAILURES;
+    }
+
+"""
+    if marker not in text:
+        raise SystemExit("Servux fix insertion point not found")
+    text = text.replace(marker, insert + marker, 1)
+servux.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
