@@ -81,4 +81,76 @@ merged_at = merge_at_text(
 maf_at.write_text(merged_at, encoding="utf-8")
 forg_at.write_text(merged_at, encoding="utf-8")
 
+
+# Minecraft 26.1+ ships unobfuscated Mojang names at runtime. Mixin defaults
+# remap=true, which makes its annotation processor demand an obfuscation map
+# that does not exist for 26.2. Mark every Minecraft mixin remap=false while
+# retaining the processor's target hierarchy validation and runtime checks.
+def disable_mixin_obfuscation_remap(java_text: str) -> tuple[str, int]:
+    token = "@Mixin("
+    pos = 0
+    changed = 0
+    out = []
+    while True:
+        start = java_text.find(token, pos)
+        if start < 0:
+            out.append(java_text[pos:])
+            break
+        open_paren = start + len(token) - 1
+        depth = 0
+        i = open_paren
+        in_string = False
+        in_char = False
+        escaped = False
+        while i < len(java_text):
+            ch = java_text[i]
+            if escaped:
+                escaped = False
+            elif (in_string or in_char) and ch == "\\":
+                escaped = True
+            elif not in_char and ch == '"':
+                in_string = not in_string
+            elif not in_string and ch == "'":
+                in_char = not in_char
+            elif not in_string and not in_char:
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+            i += 1
+        if i >= len(java_text):
+            raise SystemExit("Unbalanced @Mixin annotation while applying remap=false")
+        inside = java_text[open_paren + 1:i]
+        out.append(java_text[pos:open_paren + 1])
+        if re.search(r"\bremap\s*=", inside):
+            out.append(inside)
+        elif re.search(r"\b(?:value|targets|priority)\s*=", inside):
+            out.append(inside.rstrip() + ", remap = false")
+            changed += 1
+        else:
+            # Shorthand @Mixin(Target.class) becomes the explicit value form.
+            out.append("value = " + inside.strip() + ", remap = false")
+            changed += 1
+        out.append(")")
+        pos = i + 1
+    return "".join(out), changed
+
+mixin_remap_changes = 0
+for module in ("mafglib", "forgematica"):
+    java_root = root / module / "src/main/java"
+    for path in java_root.rglob("*.java"):
+        source = path.read_text(encoding="utf-8")
+        if "@Mixin(" not in source:
+            continue
+        rewritten, count = disable_mixin_obfuscation_remap(source)
+        if count:
+            path.write_text(rewritten, encoding="utf-8")
+            mixin_remap_changes += count
+
+if mixin_remap_changes < 100:
+    raise SystemExit(f"Expected to mark at least 100 mixins remap=false, changed {mixin_remap_changes}")
+print(f"Marked {mixin_remap_changes} Minecraft 26.2 mixins remap=false")
+
 print("Applied Forge 26.2 post-overlay source fixes")
