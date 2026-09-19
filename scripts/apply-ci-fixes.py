@@ -317,4 +317,38 @@ if removed == 0 and "malilib_onPreGameInit" in text:
     raise SystemExit("Could not remove illegal Minecraft constructor pre-game injection")
 minecraft_mixin.write_text(text, encoding="utf-8")
 
+
+
+# MixinExtras @Local capture in LevelExtractor.extract is brittle on Forge's
+# Mixin 0.8.7 and crashed with an ArrayIndexOutOfBoundsException. Retarget the
+# per-frame Litematica preparation to extractVisibleEntities, where the Frustum
+# is an explicit method parameter in Minecraft 26.2.
+level_extractor_mixin = root / "forgematica/src/main/java/fi/dy/masa/litematica/mixin/render/MixinLevelExtractor.java"
+text = level_extractor_mixin.read_text(encoding="utf-8")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n", "")
+old_extract_hook = re.compile(
+    r'\n\s*// was "cullTerrain"\s*'
+    r'@Inject\(method = "extract",\s*'
+    r'at = @At\(value = "INVOKE",\s*'
+    r'target = "Lnet/minecraft/util/profiling/ProfilerFiller;popPush\(Ljava/lang/String;\)V",\s*'
+    r'ordinal = 2, shift = At\.Shift\.BEFORE\)\)\s*'
+    r'private void litematica_onExtractLevel\(DeltaTracker deltaTracker, Camera camera, float deltaPartialTick, CallbackInfo ci,\s*'
+    r'@Local Frustum cullFrustum\)\s*'
+    r'\{([\s\S]*?)\n\s*\}\n',
+    re.MULTILINE
+)
+match = old_extract_hook.search(text)
+if match:
+    body = match.group(1).replace("cullFrustum", "frustum")
+    replacement = """
+	@Inject(method = "extractVisibleEntities", at = @At("HEAD"))
+	private void litematica_onExtractLevel(Camera camera, Frustum frustum, DeltaTracker deltaTracker, LevelRenderState output, CallbackInfo ci)
+	{""" + body + """
+	}
+"""
+    text = text[:match.start()] + replacement + text[match.end():]
+elif "@Local Frustum cullFrustum" in text:
+    raise SystemExit("Could not retarget LevelExtractor local-capture injection")
+level_extractor_mixin.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
