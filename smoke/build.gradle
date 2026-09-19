@@ -7,6 +7,9 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 minecraft {
     mappings channel: 'official', version: project.minecraft_version
+    // Use the exact merged AT superset as both mod modules. ForgeGradle can
+    // reuse transformed Minecraft artifacts across projects.
+    accessTransformers = files('../mafglib/src/main/resources/META-INF/accesstransformer.cfg')
     runs {
         register('client') {
             workingDir = layout.projectDirectory.dir('run')
