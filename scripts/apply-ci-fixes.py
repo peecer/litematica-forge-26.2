@@ -351,4 +351,35 @@ elif "@Local Frustum cullFrustum" in text:
     raise SystemExit("Could not retarget LevelExtractor local-capture injection")
 level_extractor_mixin.write_text(text, encoding="utf-8")
 
+
+
+# MaFgLib's LevelExtractor mixin also used MixinExtras @Local to capture the
+# active ProfilerFiller. On Forge's Mixin 0.8.7 that local capture crashes while
+# preparing the injection. Use Profiler.get() instead; it returns the current
+# active profiler without depending on local variable table indexes.
+malilib_level_extractor = root / "mafglib/src/main/java/fi/dy/masa/malilib/mixin/render/MixinLevelExtractor.java"
+text = malilib_level_extractor.read_text(encoding="utf-8")
+text = text.replace("import com.llamalad7.mixinextras.sugar.Local;\n\n", "")
+if "import net.minecraft.util.profiling.Profiler;" not in text:
+    text = text.replace(
+        "import net.minecraft.util.profiling.ProfilerFiller;",
+        "import net.minecraft.util.profiling.Profiler;\nimport net.minecraft.util.profiling.ProfilerFiller;"
+    )
+text = re.sub(
+    r',\s*CallbackInfo ci,\s*@Local\(name = "profiler"\) ProfilerFiller profiler\)',
+    ', CallbackInfo ci)',
+    text
+)
+text = text.replace(
+    "runExtractWorldPreWeather(deltaTracker, camera, deltaPartialTick, profiler);",
+    "runExtractWorldPreWeather(deltaTracker, camera, deltaPartialTick, Profiler.get());"
+)
+text = text.replace(
+    "runExtractWorldLast(deltaTracker, camera, deltaPartialTick, profiler);",
+    "runExtractWorldLast(deltaTracker, camera, deltaPartialTick, Profiler.get());"
+)
+if "@Local(" in text:
+    raise SystemExit("MaFgLib LevelExtractor still contains @Local capture")
+malilib_level_extractor.write_text(text, encoding="utf-8")
+
 print("Applied Forge 26.2 post-overlay source fixes")
