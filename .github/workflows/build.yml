@@ -91,8 +91,67 @@ jobs:
             unzip -l "$jar" | grep -q 'META-INF/accesstransformer.cfg'
             unzip -l "$jar" | grep -q 'pack.mcmeta'
             unzip -p "$jar" META-INF/MANIFEST.MF | grep -q 'MixinConfigs:'
+
+            if unzip -l "$jar" | grep -q '\.accesswidener
+      - name: Upload Actions artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: litematica-forge-26.2-jars
+          if-no-files-found: error
+          path: release/
+
+      - name: Publish GitHub Release
+        if: success() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="forge-26.2-build-${GITHUB_RUN_NUMBER}"
+          TITLE="Litematica Forge 26.2 build #${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Passed every-line deep source audit, Java 25 Forge build, packaged-JAR validation, forced transformation of every generated configured Mixin target, and a bounded headless packaged-client runtime smoke launch for Minecraft 26.2 + Forge 65.1.0. Install both JARs."
+
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forge-build-diagnostics
+          if-no-files-found: ignore
+          path: |
+            ci-output/
+            smoke-output/
+; then
+              echo "Unexpected Fabric access widener in Forge release: $jar"
+              exit 1
+            fi
+            if unzip -l "$jar" | grep -q 'META-INF/neoforge.mods.toml'; then
+              echo "Unexpected NeoForge metadata in Forge release: $jar"
+              exit 1
+            fi
+
+            unzip -p "$jar" pack.mcmeta > /tmp/forge-port-pack.json
+            python3 - /tmp/forge-port-pack.json <<'PY'
+import json, sys
+data=json.load(open(sys.argv[1], encoding='utf-8'))
+pack=data.get('pack', {})
+assert pack.get('min_format') == [88, 0], pack
+assert pack.get('max_format') == [88, 0], pack
+PY
           done
-          unzip -l release/mafglib-*.jar | grep -q 'META-INF/jarjar/conditional-mixin-forge-0.6.4.jar'
+
+          MAFJAR="$(find release -maxdepth 1 -type f -name 'mafglib-*.jar' | head -n 1)"
+          LITJAR="$(find release -maxdepth 1 -type f -name 'litematica-*.jar' | head -n 1)"
+
+          unzip -l "$MAFJAR" | grep -q 'META-INF/jarjar/conditional-mixin-forge-0.6.4.jar'
+          unzip -l "$MAFJAR" | grep -q 'team/cagayakegirls/mafglib/MalilibCompatMod.class'
+          unzip -l "$MAFJAR" | grep -q 'fi/dy/masa/malilib/network/ForgePayloadBridge.class'
+          unzip -l "$MAFJAR" | grep -q 'mixins.malilib.json'
+          unzip -l "$MAFJAR" | grep -q 'assets/malilib/shaders/legacy_terrain.vsh'
+
+          unzip -l "$LITJAR" | grep -q 'team/cagayakegirls/forgematica/LitematicaCompatMod.class'
+          unzip -l "$LITJAR" | grep -q 'mixins.litematica.json'
+          unzip -l "$LITJAR" | grep -q 'fi/dy/masa/litematica/network/ServuxLitematicaHandler.class'
+          unzip -l "$LITJAR" | grep -q 'assets/litematica/shaders/legacy_terrain.vsh'
 
       - name: Upload Actions artifact
         if: success()
