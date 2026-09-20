@@ -69,9 +69,9 @@ tail -n 800 "$combined" || true
 
 fatal_pattern='MixinTransformerError|InvalidMixinException|Mixin apply failed|Critical injection failure|InjectionError|ModLoadingException|Failed to create mod instance|NoClassDefFoundError|ClassNotFoundException|NoSuchMethodError|NoSuchFieldError|IllegalAccessError|VerifyError|Exception in thread "[^"]+"|java\.lang\.LinkageError|Could not launch|Failed to load mod|EarlyLoadingException|Dependency restrictions were not met'
 
-# ForgeGradle's headless run can occasionally lose vanilla client resources.
-# If even a minecraft: shader is missing, this is not evidence that either mod
-# JAR is at fault. Record it separately so CI does not publish a false diagnosis.
+# A missing vanilla asset can be an infrastructure problem rather than a mod
+# problem, but this release gate is intentionally strict: an incomplete runtime
+# environment must block publishing rather than being treated as a pass.
 if grep -E -i "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "$combined" >/dev/null; then
   echo "SMOKE_INFRASTRUCTURE_ASSET_FAILURE: vanilla Minecraft shader assets are missing from the ForgeGradle headless run."
   touch ci-output/SMOKE_INFRASTRUCTURE_ASSET_FAILURE
@@ -83,7 +83,8 @@ if grep -E -i "Couldn't find source for (VERTEX|FRAGMENT) shader \(minecraft:" "
     exit 1
   fi
 
-  exit 0
+  echo "Runtime smoke environment was incomplete; blocking release."
+  exit 1
 fi
 
 if grep -E -i "$fatal_pattern" "$combined" >/dev/null; then
