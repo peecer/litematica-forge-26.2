@@ -109,7 +109,7 @@ jobs:
           set -euo pipefail
           TAG="forge-26.2-build-${GITHUB_RUN_NUMBER}"
           TITLE="Litematica Forge 26.2 build #${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Passed every-line deep source audit, Java 25 Forge build, packaged-JAR validation, forced transformation of every generated configured Mixin target, and a bounded headless packaged-client runtime smoke launch for Minecraft 26.2 + Forge 65.1.0. Install both JARs."
+          gh release create "$TAG" release/*.jar release/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes "Passed every-line deep source audit, Java 25 Forge build, strict packaged-JAR validation, forced transformation of every generated configured Mixin target, and a bounded packaged-client smoke launch for Minecraft 26.2 + Forge 65.1.0. Install both JARs."
 
       - name: Upload diagnostics
         if: failure()
@@ -124,23 +124,20 @@ jobs:
               echo "Unexpected Fabric access widener in Forge release: $jar"
               exit 1
             fi
+
             if unzip -l "$jar" | grep -q 'META-INF/neoforge.mods.toml'; then
               echo "Unexpected NeoForge metadata in Forge release: $jar"
               exit 1
             fi
 
-            unzip -p "$jar" pack.mcmeta > /tmp/forge-port-pack.json
-            python3 - /tmp/forge-port-pack.json <<'PY'
-import json, sys
-data=json.load(open(sys.argv[1], encoding='utf-8'))
-pack=data.get('pack', {})
-assert pack.get('min_format') == [88, 0], pack
-assert pack.get('max_format') == [88, 0], pack
-PY
+            python3 -c 'import json,sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); p=json.loads(z.read("pack.mcmeta")); assert p["pack"]["min_format"] == [88,0] and p["pack"]["max_format"] == [88,0], p' "$jar"
           done
 
           MAFJAR="$(find release -maxdepth 1 -type f -name 'mafglib-*.jar' | head -n 1)"
           LITJAR="$(find release -maxdepth 1 -type f -name 'litematica-*.jar' | head -n 1)"
+
+          test -n "$MAFJAR"
+          test -n "$LITJAR"
 
           unzip -l "$MAFJAR" | grep -q 'META-INF/jarjar/conditional-mixin-forge-0.6.4.jar'
           unzip -l "$MAFJAR" | grep -q 'team/cagayakegirls/mafglib/MalilibCompatMod.class'
